@@ -1,0 +1,31 @@
+{
+  "note": "Estimated heat-related deaths per summer in Europe. 2022-2024 from the Nature Medicine excess-mortality series (Ballester et al. and follow-ups); 2003 from the classic Robine et al. estimate, a different methodology, flagged as such in the chart.",
+  "summers": [
+    { "year": "2003", "deaths": 70000, "approx": true, "differentMethod": true },
+    { "year": "2022", "deaths": 61672 },
+    { "year": "2023", "deaths": 47690 },
+    { "year": "2024", "deaths": 62775 }
+  ],
+  "topCountries2022": [
+    { "country": "Italy", "deaths": 18010 },
+    { "country": "Spain", "deaths": 11324 },
+    { "country": "Germany", "deaths": 8173 }
+  ],
+  "adaptation": {
+    "wouldBeHigherWithout": 80,
+    "elderlyWouldBeHigherWithout": 100.7
+  },
+  "attribution2025": {
+    "cities": 854,
+    "totalDeaths": 24400,
+    "fromClimateChange": 16500,
+    "shareFromClimateChange": 68,
+    "juneJulyEpisode": {
+      "cities": 12,
+      "days": 10,
+      "totalDeaths": 2300,
+      "fromClimateChange": 1500,
+      "tempBoost": "1-4 °C"
+    }
+  }
+}
