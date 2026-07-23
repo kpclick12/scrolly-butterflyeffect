@@ -2,6 +2,7 @@
   import Scrolly from "../components/Scrolly.svelte";
   import HeatBars from "../components/HeatBars.svelte";
   import AttributionSplit from "../components/AttributionSplit.svelte";
+  import StatTiles from "../components/StatTiles.svelte";
 
   let { data } = $props();
   let currentStep = $state(0);
@@ -9,6 +10,14 @@
   const highlightYear = $derived(
     currentStep === 0 ? "2003" : currentStep === 1 ? "2022" : currentStep === 2 ? "2024" : null
   );
+
+  const f26 = $derived(data.heat.france2026);
+  const franceTiles = $derived([
+    { num: f26.excessDeaths.toLocaleString("en-US"), label: "excess deaths in France during the June 2026 heatwave — the worst heatwave toll there since 2003", accent: "var(--series-red)" },
+    { num: "1947", label: "records begin — and June 2026 was France's hottest June since then", accent: "var(--series-amber)" },
+    { num: "+80%", label: "rise in deaths in the Paris region at the peak (Santé publique France)", accent: "var(--series-red)" },
+    { num: "2 in 3", label: "of the victims were 75 or older", accent: "var(--series-red)" },
+  ]);
 </script>
 
 <section class="act" aria-label="Act 3: Heat" style="--act-accent: var(--ink-red);">
@@ -29,6 +38,9 @@
         </div>
         <div class="frame" class:is-active={currentStep === 3}>
           <AttributionSplit data={data.heat.attribution2025} />
+        </div>
+        <div class="frame" class:is-active={currentStep === 4}>
+          <StatTiles tiles={franceTiles} />
         </div>
       </div>
     {/snippet}
@@ -88,6 +100,23 @@
         In the late-June heatwave alone, climate change made the heat
         1–4&nbsp;°C hotter and tripled the ten-day death toll across twelve
         major cities.
+      </p>
+    </section>
+
+    <section class="scrolly-step">
+      <p class="kicker">June 2026 · France</p>
+      <h3>The story keeps writing itself</h3>
+      <p>
+        Last month, France lived its hottest June since records began in
+        1947 — June 24 and 25 were the country's hottest average days ever
+        measured, in any month. Health authorities counted
+        <strong>5,764 excess deaths</strong>, calling the toll
+        "unprecedented": the worst heatwave mortality in France since 2003.
+      </p>
+      <p>
+        In the Paris region, deaths rose 80% at the peak; two in three of
+        the dead were 75 or older. Every act of this essay was written from
+        past records. This one arrived while it was being read.
       </p>
     </section>
   </Scrolly>
