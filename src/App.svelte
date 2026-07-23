@@ -29,19 +29,24 @@
         <ellipse cx="0" cy="0" rx="1.8" ry="8" fill="#f2e9cf"/>
       </g>
     </svg>
-    <h2>The next flap</h2>
+    <h2>If a flap of a wing may change the weather —<br />what can our living cause?</h2>
     <p>
-      The butterfly effect is usually told as a story about helplessness —
-      chaos no one can predict. Lorenz meant almost the opposite: in a
-      sensitive system, <em>small things matter enormously</em>. That cuts
-      both ways.
+      That is no longer a rhetorical question. Attribution science answers
+      it in measured numbers: the warming from our emissions — about
+      2.5&nbsp;°C over Europe — tripled the death toll of the June 2025
+      heatwave, made the 2021 floods up to nine times more likely, and
+      helped cure the forests that burned a record million hectares in one
+      season. Not a prophecy of doom; a documented, quantified push on
+      every storm in this story.
     </p>
     <p>
-      Every tenth of a degree not added is a heatwave blunted, a flood that
-      crests lower, a fire season that ends sooner. And adaptation already
-      works: without this century's heat plans and warning systems, recent
-      summers would have killed nearly twice as many. In a chaotic climate,
-      there are no flaps too small to count — including ours.
+      And sensitivity cuts both ways — that is also just how the system
+      works. Every tenth of a degree not added blunts a future heatwave,
+      lowers a future flood crest, shortens a future fire season. And
+      adaptation measurably works already: without this century's heat
+      plans and warning systems, recent summers would have killed nearly
+      twice as many. In a system this sensitive, no flap is too small to
+      count — including ours.
     </p>
   </div>
 </section>
