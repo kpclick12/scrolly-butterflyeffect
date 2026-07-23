@@ -73,6 +73,8 @@ section at the bottom of the page itself; in short:
   flagged in the chart)
 - **Summer 2025 attribution** — Imperial College London / LSHTM rapid
   attribution analyses
+- **June 2026 French heatwave** — Santé publique France provisional
+  excess-mortality reporting; Météo-France (hottest June since 1947)
 - **Floods** — Munich Re damage estimates, World Weather Attribution,
   AEMET, ESOTC 2024
 - **Wildfire burnt area** — EFFIS / JRC annual mapping, EU-27
