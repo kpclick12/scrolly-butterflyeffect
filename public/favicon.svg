@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <!-- Small yellow butterfly on a storm-navy field -->
+  <rect width="64" height="64" rx="12" fill="#131f33"/>
+  <g transform="translate(32 33)">
+    <path d="M-2 -2 C -14 -18, -26 -14, -24 -4 C -23 3, -14 6, -3 3 Z" fill="#f4c531"/>
+    <path d="M-2 2 C -12 12, -20 14, -18 5 C -17 0, -10 -1, -2 -1 Z" fill="#e0a821"/>
+    <path d="M2 -2 C 14 -18, 26 -14, 24 -4 C 23 3, 14 6, 3 3 Z" fill="#f4c531"/>
+    <path d="M2 2 C 12 12, 20 14, 18 5 C 17 0, 10 -1, 2 -1 Z" fill="#e0a821"/>
+    <ellipse cx="0" cy="0" rx="1.8" ry="8" fill="#3a3020"/>
+    <path d="M-1 -7 C -3 -11, -5 -12, -6 -13 M1 -7 C 3 -11, 5 -12, 6 -13" stroke="#3a3020" stroke-width="1.2" fill="none" stroke-linecap="round"/>
+  </g>
+</svg>

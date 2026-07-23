@@ -1,0 +1,17 @@
+{
+  "note": "Decadal mean surface air temperature anomalies relative to the 1850-1900 pre-industrial baseline, in °C. Approximate, rounded values assembled from Copernicus ERA5 / ESOTC and WMO reporting.",
+  "decades": [
+    { "label": "1950s", "europe": 0.1, "world": 0.05 },
+    { "label": "1960s", "europe": 0.1, "world": 0.05 },
+    { "label": "1970s", "europe": 0.15, "world": 0.1 },
+    { "label": "1980s", "europe": 0.5, "world": 0.3 },
+    { "label": "1990s", "europe": 0.8, "world": 0.5 },
+    { "label": "2000s", "europe": 1.2, "world": 0.7 },
+    { "label": "2010s", "europe": 1.7, "world": 1.0 },
+    { "label": "2020s", "europe": 2.4, "world": 1.3 }
+  ],
+  "ratesPerDecade": { "europe": 0.56, "world": 0.27 },
+  "fiveYearMean": { "europe": 2.5, "world": 1.4, "arctic": 3.2 },
+  "seaRecordYearsInARow": 4,
+  "warmestYearOnRecord": 2024
+}
