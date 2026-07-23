@@ -1,0 +1,40 @@
+{
+  "note": "Major recent flood disasters in Europe. Deaths are reported totals; costs are approximate published damage estimates, rounded.",
+  "events": [
+    {
+      "id": "ahr",
+      "year": 2021,
+      "name": "Western Europe floods",
+      "region": "Germany · Belgium",
+      "deaths": 243,
+      "costLabel": "≈ $54 bn total damage",
+      "detail": "Two months of rain in two days. The Ahr valley alone lost 134 people; water flows reached an estimated 100× normal."
+    },
+    {
+      "id": "boris",
+      "year": 2024,
+      "name": "Storm Boris",
+      "region": "Central Europe",
+      "deaths": 27,
+      "costLabel": "> €2 bn damage",
+      "detail": "Record rainfall across Austria, Czechia, Poland, Romania and neighbours — the most widespread European flooding in over a decade began here."
+    },
+    {
+      "id": "valencia",
+      "year": 2024,
+      "name": "Valencia DANA",
+      "region": "Spain",
+      "deaths": 223,
+      "costLabel": "tens of €bn damage",
+      "detail": "Chiva received 491 mm of rain in eight hours — roughly a year's worth. 15,000 people were displaced."
+    }
+  ],
+  "esotc2024": {
+    "peopleAffected": 413000,
+    "livesLost": 335,
+    "riverNetworkShareAboveHighFlood": 30,
+    "stormAndFloodCostBnEUR": 18,
+    "mostWidespreadSince": 2013
+  },
+  "attribution2021": "Climate change made the 2021 rainfall event 1.2-9× more likely and 3-19% more intense (World Weather Attribution)."
+}
