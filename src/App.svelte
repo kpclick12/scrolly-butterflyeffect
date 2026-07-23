@@ -92,6 +92,14 @@
         12 cities, ≈1,500 attributable.
       </li>
       <li>
+        <strong>June 2026 French heatwave</strong> — Santé publique France
+        provisional excess-mortality reporting (as of July 2026): 5,764
+        excess deaths among people 15 and older, ≈80% rise in deaths in the
+        Paris region at the peak, roughly two-thirds of victims aged 75+;
+        Météo-France on June 2026 being the hottest June since records
+        began in 1947. Provisional figures, subject to revision.
+      </li>
+      <li>
         <strong>Floods</strong> — 2021: 243 deaths (Germany/Belgium),
         ≈$54&nbsp;bn total damage (Munich Re); likelihood shift 1.2–9×
         (World Weather Attribution). 2024: Storm Boris and the Valencia

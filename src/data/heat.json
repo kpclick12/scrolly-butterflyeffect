@@ -15,6 +15,16 @@
     "wouldBeHigherWithout": 80,
     "elderlyWouldBeHigherWithout": 100.7
   },
+  "france2026": {
+    "excessDeaths": 5764,
+    "hottestJuneSinceRecordsBegan": 1947,
+    "hottestDaysEver": "June 24-25, 2026 — France's hottest average days ever recorded, any month",
+    "parisDeathsIncreasePct": 80,
+    "share75plus": "about two-thirds (≥3,719)",
+    "peakConcentration": "≈56% of the excess deaths fell in or just after the June 25-27 peak",
+    "worstSince": 2003,
+    "france2003Deaths": 15000
+  },
   "attribution2025": {
     "cities": 854,
     "totalDeaths": 24400,
