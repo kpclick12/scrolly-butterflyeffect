@@ -2,21 +2,25 @@
   import { onMount } from "svelte";
   import * as THREE from "three";
 
-  // Scroll-driven 3D prologue, kept wordless on purpose: a yellow butterfly
-  // over a summer meadow, then the storm that takes the scene from it. One
-  // eased value drives everything — `storm` in [0,1], following the reader's
-  // scroll — so scrubbing the scrollbar scrubs the weather:
-  //   0.00–0.25  summer day, light clouds drifting
-  //   0.25–0.55  clouds cluster and darken, sun fades, wind rises
-  //   0.55–0.75  first rain, the meadow goes grey-green
-  //   0.75–0.92  lightning; a gust carries the butterfly out of the scene
-  //   0.92–1.00  the storm has the meadow to itself
-  // All geometry is procedural — no model files.
+  // Scroll-driven 3D prologue, kept nearly wordless: one meadow lives
+  // through every extreme the essay's acts then unpack. One eased value
+  // drives everything — `storm` in [0,1], following the reader's scroll —
+  // so scrubbing the scrollbar scrubs the weather:
+  //   0.00–0.18  summer day, the butterfly, light clouds
+  //   0.18–0.45  the STORM builds — clouds darken, wind rises, a gust
+  //              carries the butterfly out of the scene
+  //   0.45–0.65  the FLOOD — downpour, lightning, water rises over the grass
+  //   0.65–0.84  the DROUGHT — the storm clears into a scorching aftermath:
+  //              water drains, a harsh sun, the meadow cures to straw
+  //   0.84–1.00  the FIRE — the horizon ignites: glow, smoke, embers
+  // The same warmed atmosphere drives all of it — wetter wets, drier dries
+  // — which is exactly the essay's argument. All geometry is procedural.
 
   let wrap;
   let canvas;
   let vignetteEl;
   let cardEls = [];
+  let chipEls = [];
   let webglFailed = $state(false);
 
   // Two cards only: the title, and a single line that hands over to Act One.
@@ -28,9 +32,17 @@
       hint: true,
     },
     {
-      band: [0.86, 1.01],
-      body: "First the butterfly. Then the storm. Europe's atmosphere has been nudged by 2.5 °C — this is the story of what followed.",
+      band: [0.9, 1.01],
+      body: "First the butterfly. Then the storm, the flood, the fire — one warmed atmosphere loads the dice for all of them. Europe's has been nudged by 2.5 °C. This is the story of what followed.",
     },
+  ];
+
+  // Small stage labels, echoing the acts the essay walks through next.
+  const chips = [
+    { label: "the storm", band: [0.26, 0.43] },
+    { label: "the flood", band: [0.5, 0.64] },
+    { label: "the drought", band: [0.7, 0.82] },
+    { label: "the fire", band: [0.86, 0.97] },
   ];
 
   function bandOpacity(p, [a, b]) {
@@ -74,12 +86,21 @@
     const dayTip = new THREE.Color("#a8d468");
     const stormBase = new THREE.Color("#1a2a14");
     const stormTip = new THREE.Color("#4a5c35");
+    // The drought and fire phases: meadow cured to straw, smoky haze.
+    const dryBase = new THREE.Color("#6e5a26");
+    const dryTip = new THREE.Color("#cfae52");
+    const dryGround = new THREE.Color("#96803e");
+    const fireGround = new THREE.Color("#5c4426");
+    const dryHaze = new THREE.Color("#ede6d0");
+    const fireHaze = new THREE.Color("#8a6a48");
 
     // --- Sky: a gradient dome, not a flat color — the horizon stays lighter
     // than the zenith in both weathers, which is most of what makes a sky
     // read as real. ---
     const skyUniforms = {
       uStorm: { value: 0 },
+      uDry: { value: 0 },
+      uFire: { value: 0 },
       uFlash: { value: 0 },
       uDayZen: { value: dayZenith },
       uDayHor: { value: dayHorizon },
@@ -103,6 +124,8 @@
         `,
         fragmentShader: `
           uniform float uStorm;
+          uniform float uDry;
+          uniform float uFire;
           uniform float uFlash;
           uniform vec3 uDayZen; uniform vec3 uDayHor;
           uniform vec3 uStormZen; uniform vec3 uStormHor;
@@ -118,6 +141,12 @@
             day += vec3(0.28, 0.2, 0.05) * sunGlow * (1.0 - uStorm);
             vec3 storm = mix(uStormHor, uStormZen, g);
             vec3 c = mix(day, storm, uStorm);
+            // The scorched aftermath: a white-hot hazy sky.
+            vec3 dry = mix(vec3(0.93, 0.89, 0.78), vec3(0.55, 0.73, 0.86), g);
+            c = mix(c, dry, uDry);
+            // Fire: smoke dims the sky overhead, an orange glow eats the horizon.
+            c = mix(c, vec3(0.30, 0.26, 0.22), uFire * (0.25 + 0.45 * g));
+            c += vec3(0.85, 0.38, 0.08) * pow(1.0 - h, 4.0) * uFire * 0.9;
             c = mix(c, uFlashCol, uFlash * 0.55);
             gl_FragColor = vec4(c, 1.0);
           }
@@ -301,6 +330,76 @@
     addCluster(0, 10, -14, 7, 12, 9, false);
     addCluster(12, 8.5, -12, 6, 9, 8, false);
     addCluster(-5, 7.5, -10, 5, 10, 7, false);
+
+    // --- Flood water: a dark sheet that rises over the grass during the
+    // downpour, then drains away as the drought phase takes over. ---
+    const water = new THREE.Mesh(
+      new THREE.CircleGeometry(50, 40),
+      new THREE.MeshBasicMaterial({ color: "#2e3c46", transparent: true, opacity: 0, depthWrite: false })
+    );
+    water.rotation.x = -Math.PI / 2;
+    water.position.y = -0.06;
+    water.visible = false;
+    scene.add(water);
+
+    // --- Fire on the horizon: a glow band, rising smoke, drifting embers. ---
+    const fireGlowTex = (() => {
+      const c = document.createElement("canvas");
+      c.width = 256;
+      c.height = 128;
+      const g = c.getContext("2d");
+      const grad = g.createLinearGradient(0, 128, 0, 0);
+      grad.addColorStop(0, "rgba(255,150,40,0.95)");
+      grad.addColorStop(0.45, "rgba(230,90,25,0.5)");
+      grad.addColorStop(1, "rgba(200,60,20,0)");
+      g.fillStyle = grad;
+      g.fillRect(0, 0, 256, 128);
+      const t = new THREE.CanvasTexture(c);
+      t.colorSpace = THREE.SRGBColorSpace;
+      return t;
+    })();
+    const fireGlow = new THREE.Mesh(
+      new THREE.PlaneGeometry(70, 7),
+      new THREE.MeshBasicMaterial({
+        map: fireGlowTex,
+        transparent: true,
+        opacity: 0,
+        depthWrite: false,
+        blending: THREE.AdditiveBlending,
+      })
+    );
+    fireGlow.position.set(0, 2.6, -26);
+    scene.add(fireGlow);
+    const smokes = [];
+    for (let i = 0; i < 5; i++) {
+      const s = new THREE.Sprite(
+        new THREE.SpriteMaterial({ map: puffTex, transparent: true, opacity: 0, depthWrite: false, color: "#4a423a" })
+      );
+      s.position.set(-20 + i * 10 + Math.random() * 4, 5 + Math.random() * 3, -24);
+      s.scale.set(7 + Math.random() * 4, 5 + Math.random() * 2, 1);
+      s.userData.rise = 0.15 + Math.random() * 0.2;
+      scene.add(s);
+      smokes.push(s);
+    }
+    const EMBERS = 160;
+    const emberGeom = new THREE.BufferGeometry();
+    const emberPos = new Float32Array(EMBERS * 3);
+    for (let i = 0; i < EMBERS; i++) {
+      emberPos[i * 3] = -14 + Math.random() * 28;
+      emberPos[i * 3 + 1] = Math.random() * 5;
+      emberPos[i * 3 + 2] = -16 + Math.random() * 8;
+    }
+    emberGeom.setAttribute("position", new THREE.BufferAttribute(emberPos, 3));
+    const emberMat = new THREE.PointsMaterial({
+      color: "#ff9a3c",
+      size: 0.06,
+      transparent: true,
+      opacity: 0,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending,
+    });
+    const embers = new THREE.Points(emberGeom, emberMat);
+    scene.add(embers);
 
     // --- Rain: streaks whose slant equals the drops' actual velocity
     // ratio (drift ÷ fall), so what you see matches how they move. Heavy
@@ -539,6 +638,8 @@
     const io = new IntersectionObserver(([e]) => (visible = e.isIntersecting));
     io.observe(wrap);
 
+    const sunFireCol = new THREE.Color("#ff8a40");
+    const waterCol = new THREE.Color("#2e3c46");
     const clock = new THREE.Clock();
     let elapsed = 0;
     let flashT = -1; // time within the current flash envelope; -1 = idle
@@ -558,9 +659,19 @@
       storm += (targetStorm - storm) * Math.min(1, dt * 5);
       const t = elapsed;
 
+      // Phase factors, all derived from the one eased scroll value. Each
+      // rises and (where the phase passes) falls again, so the meadow moves
+      // through storm → flood → drought → fire as one continuous day.
+      const P = storm;
+      const stormF = Math.max(0, Math.min(1, smooth(0.18, 0.42, P) - smooth(0.62, 0.78, P)));
+      const rainF = Math.max(0, Math.min(1, smooth(0.4, 0.5, P) - smooth(0.6, 0.7, P)));
+      const floodF = Math.max(0, Math.min(1, smooth(0.45, 0.62, P) - smooth(0.68, 0.82, P)));
+      const dryF = smooth(0.64, 0.8, P);
+      const fireF = smooth(0.84, 0.95, P);
+
       // Lightning: a two-pulse flicker, the way real strikes re-strike.
       let flash = 0;
-      if (!reduceMotion && storm > 0.72) {
+      if (!reduceMotion && P > 0.48 && P < 0.7) {
         nextFlashIn -= dt;
         if (nextFlashIn <= 0 && flashT < 0) {
           rebuildBolt();
@@ -577,40 +688,81 @@
       }
 
       // Atmosphere
-      skyUniforms.uStorm.value = storm;
+      skyUniforms.uStorm.value = stormF;
+      skyUniforms.uDry.value = dryF;
+      skyUniforms.uFire.value = fireF;
       skyUniforms.uFlash.value = flash;
-      grassUniforms.uFog.value.copy(dayHorizon).lerp(stormHorizon, storm);
+      grassUniforms.uFog.value
+        .copy(dayHorizon)
+        .lerp(stormHorizon, stormF)
+        .lerp(dryHaze, dryF)
+        .lerp(fireHaze, fireF);
       grassUniforms.uTime.value = t;
-      grassUniforms.uWind.value = (reduceMotion ? 0.25 : 1) * smooth(0.2, 0.85, storm);
-      grassUniforms.uBase.value.copy(dayBase).lerp(stormBase, storm);
-      grassUniforms.uTip.value.copy(dayTip).lerp(stormTip, storm);
-      ground.material.color.copy(dayGround).lerp(stormGround, storm);
+      grassUniforms.uWind.value = (reduceMotion ? 0.25 : 1) * (stormF * 0.9 + fireF * 0.25);
+      grassUniforms.uBase.value.copy(dayBase).lerp(stormBase, stormF).lerp(dryBase, dryF);
+      grassUniforms.uTip.value.copy(dayTip).lerp(stormTip, stormF).lerp(dryTip, dryF);
+      ground.material.color
+        .copy(dayGround)
+        .lerp(stormGround, stormF)
+        .lerp(dryGround, dryF)
+        .lerp(fireGround, fireF * 0.7);
       if (flash > 0) ground.material.color.lerp(flashColor, flash * 0.12);
-      sun.material.opacity = Math.max(0, 1 - storm * 2.2);
+      // The sun: out in the morning, swallowed by the storm, back harsh and
+      // white for the drought, then dimmed orange behind the smoke.
+      sun.material.opacity = Math.max(0, 1 - stormF * 2.2) * (1 - fireF * 0.55);
+      sun.material.color.setRGB(1, 1 - dryF * 0.04, 1 - dryF * 0.15).lerp(sunFireCol, fireF);
+      sun.scale.setScalar(9 + dryF * 2.5);
       flowers.children.forEach((f, i) => {
-        f.rotation.z = Math.sin(t * 1.3 + i) * (0.05 + storm * 0.35);
+        f.rotation.z = Math.sin(t * 1.3 + i) * (0.05 + stormF * 0.35);
       });
 
+      // Flood water
+      water.visible = floodF > 0.01;
+      water.position.y = -0.06 + floodF * 0.55;
+      water.material.opacity = 0.85 * Math.min(1, floodF * 2);
+      water.material.color.copy(waterCol);
+      if (flash > 0) water.material.color.lerp(flashColor, flash * 0.25);
+
+      // Fire
+      fireGlow.material.opacity = fireF * (0.75 + 0.25 * Math.sin(t * 7.3));
+      for (const s of smokes) {
+        s.material.opacity = fireF * 0.55;
+        if (fireF > 0.01) {
+          s.position.y += s.userData.rise * dt;
+          if (s.position.y > 11) s.position.y = 4.5;
+        }
+      }
+      emberMat.opacity = fireF * 0.85;
+      if (fireF > 0.01) {
+        const ep = emberGeom.attributes.position.array;
+        for (let i = 0; i < EMBERS; i++) {
+          ep[i * 3] += Math.sin(t * 2 + i) * dt * 0.4;
+          ep[i * 3 + 1] += dt * (0.5 + ((i * 13) % 7) / 8);
+          if (ep[i * 3 + 1] > 6) ep[i * 3 + 1] = 0.2;
+        }
+        emberGeom.attributes.position.needsUpdate = true;
+      }
+
       // Clouds
-      const cloudIn = smooth(0.12, 0.6, storm);
-      tmpColor.copy(dayCloudCol).lerp(stormCloudTop, storm);
-      tmpColor2.copy(dayCloudCol).lerp(stormCloudBase, storm);
+      const cloudIn = smooth(0.12, 0.42, P) * (1 - dryF * 0.75);
+      tmpColor.copy(dayCloudCol).lerp(stormCloudTop, stormF).lerp(fireHaze, fireF * 0.7);
+      tmpColor2.copy(dayCloudCol).lerp(stormCloudBase, stormF).lerp(fireHaze, fireF * 0.7);
       for (const c of puffs) {
         const d = c.userData;
-        c.material.opacity = d.dayO + (d.stormO - d.dayO) * cloudIn;
+        c.material.opacity = d.dayO * (1 - dryF * 0.6) + (d.stormO - d.dayO) * cloudIn;
         c.material.color.copy(d.low ? tmpColor2 : tmpColor);
         if (flash > 0) c.material.color.lerp(flashColor, flash * (d.low ? 0.5 : 0.3));
-        c.position.x += d.drift * dt * (0.4 + storm * 2.6);
+        c.position.x += d.drift * dt * (0.4 + stormF * 2.6);
         c.position.y = d.baseY - d.drop * cloudIn;
         if (c.position.x > 22) c.position.x = -22;
       }
 
       // Rain
-      rainMat.opacity = Math.max(0, (storm - 0.55) / 0.45) * (reduceMotion ? 0.25 : 0.55);
+      rainMat.opacity = rainF * (reduceMotion ? 0.25 : 0.55);
       if (rainMat.opacity > 0) {
         const p = rainGeom.attributes.position.array;
-        const fallSpeed = 9 + storm * 6;
-        const driftSpeed = storm * 2.2;
+        const fallSpeed = 9 + stormF * 6;
+        const driftSpeed = stormF * 2.2;
         const fall = dt * fallSpeed;
         const drift = dt * driftSpeed;
         // Slant = the drops' real velocity ratio, so streaks point exactly
@@ -643,9 +795,9 @@
       boltMat.opacity = flash;
 
       // Butterfly: a calm wandering flight while the day lasts; buffeted as
-      // the wind rises; finally caught by a gust and carried out of frame.
-      const agitation = smooth(0.3, 0.75, storm);
-      const exit = smooth(0.78, 0.93, storm);
+      // the wind rises; carried out of frame by a gust before the flood.
+      const agitation = smooth(0.2, 0.36, P);
+      const exit = smooth(0.34, 0.46, P);
       const fx = Math.sin(t * 0.45) * 1.5 + Math.sin(t * 1.7) * 0.5 * agitation + exit * exit * 14;
       const fy = 1.55 + Math.sin(t * 1.1) * (0.3 + agitation * 0.3) + exit * 3.2;
       const fz = 0.9 + Math.cos(t * 0.3) * 0.7 - exit * 2;
@@ -680,16 +832,20 @@
       // Camera: a slow breath; pulls back slightly as the storm grows, and
       // shudders for an instant on each strike.
       camera.position.x = Math.sin(t * 0.05) * 0.25 + flash * 0.05 * Math.sin(t * 70);
-      camera.position.y = 1.6 + storm * 0.25;
-      camera.position.z = 6 + storm * 0.8;
+      camera.position.y = 1.6 + P * 0.25;
+      camera.position.z = 6 + P * 0.8;
       camera.lookAt(0, 1.35, 0);
-      if (vignetteEl) vignetteEl.style.opacity = storm * 0.6;
+      if (vignetteEl) vignetteEl.style.opacity = Math.max(stormF * 0.6, fireF * 0.5);
 
       cardEls.forEach((el, i) => {
         if (!el) return;
-        const o = bandOpacity(storm, cards[i].band);
+        const o = bandOpacity(P, cards[i].band);
         el.style.opacity = o;
         el.style.visibility = o === 0 ? "hidden" : "visible";
+      });
+      chipEls.forEach((el, i) => {
+        if (!el) return;
+        el.style.opacity = bandOpacity(P, chips[i].band);
       });
 
       renderer.render(scene, camera);
@@ -713,6 +869,13 @@
       wingMap.dispose();
       antGeom.dispose();
       puffTex.dispose();
+      water.geometry.dispose();
+      water.material.dispose();
+      fireGlowTex.dispose();
+      fireGlow.geometry.dispose();
+      fireGlow.material.dispose();
+      emberGeom.dispose();
+      emberMat.dispose();
     };
   });
 </script>
@@ -721,7 +884,7 @@
   class="hero3d"
   bind:this={wrap}
   role="img"
-  aria-label="Animated scene: a yellow butterfly flutters over a sunny meadow. As you scroll, clouds gather and darken, wind bends the grass, rain slants in and lightning flashes — a gust carries the butterfly away and the meadow becomes a thunderstorm."
+  aria-label="Animated scene: a yellow butterfly flutters over a sunny meadow. As you scroll, a storm builds and a gust carries the butterfly away; a downpour with lightning floods the meadow; the storm clears into a scorching drought that cures the grass to straw; finally the horizon catches fire, with smoke and embers."
 >
   <div class="hero3d-sticky">
     {#if webglFailed}
@@ -736,6 +899,11 @@
     {:else}
       <canvas bind:this={canvas} aria-hidden="true"></canvas>
       <div class="vignette" bind:this={vignetteEl} aria-hidden="true"></div>
+      <div class="phase-chips" aria-hidden="true">
+        {#each chips as chip, i}
+          <p class="chip" bind:this={chipEls[i]}>{chip.label}</p>
+        {/each}
+      </div>
       {#each cards as card, i}
         <div class="hero3d-card" class:title-card={card.title} bind:this={cardEls[i]}>
           {#if card.eyebrow}<p class="eyebrow">{card.eyebrow}</p>{/if}
@@ -750,10 +918,10 @@
 
 <style>
   .hero3d {
-    /* Scroll runway: the sticky viewport inside plays the storm as the
-       reader moves through it. Short enough to stay one clean beat —
-       butterfly, then storm. */
-    height: 320svh;
+    /* Scroll runway: the sticky viewport inside plays the whole arc —
+       butterfly, storm, flood, drought, fire — as the reader moves
+       through it. */
+    height: 480svh;
     position: relative;
   }
   .hero3d-sticky {
@@ -774,6 +942,27 @@
     pointer-events: none;
     opacity: 0;
     background: radial-gradient(ellipse at center, transparent 45%, rgba(5, 8, 14, 0.55) 100%);
+  }
+  .phase-chips {
+    position: absolute;
+    left: 28px;
+    bottom: 26px;
+    pointer-events: none;
+  }
+  .chip {
+    position: absolute;
+    left: 0;
+    bottom: 0;
+    margin: 0;
+    font-size: 13px;
+    text-transform: uppercase;
+    letter-spacing: 0.28em;
+    font-weight: 700;
+    color: rgba(255, 255, 255, 0.85);
+    text-shadow: 0 1px 10px rgba(5, 8, 14, 0.6);
+    white-space: nowrap;
+    opacity: 0;
+    transition: opacity 0.2s linear;
   }
   .hero3d-card {
     position: absolute;
