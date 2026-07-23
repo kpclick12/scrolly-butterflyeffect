@@ -15,6 +15,7 @@
 
   let wrap;
   let canvas;
+  let vignetteEl;
   let cardEls = [];
   let webglFailed = $state(false);
 
@@ -64,7 +65,7 @@
     // --- Palette endpoints: everything lerps between "day" and "storm". ---
     const dayZenith = new THREE.Color("#4f9fe6");
     const dayHorizon = new THREE.Color("#d9edf9");
-    const stormZenith = new THREE.Color("#10161f");
+    const stormZenith = new THREE.Color("#0b1018");
     const stormHorizon = new THREE.Color("#49525a"); // grey with a sick green cast
     const flashColor = new THREE.Color("#dfe6f2");
     const dayGround = new THREE.Color("#74a355");
@@ -322,87 +323,195 @@
     const rain = new THREE.LineSegments(rainGeom, rainMat);
     scene.add(rain);
 
-    // --- Butterfly ---
-    function wingTexture() {
+    // --- Butterfly: an eastern tiger swallowtail, painted onto separate
+    // fore- and hindwing planes. The hindwings lag the forewings by a beat
+    // and sit just beneath them — the overlap and lag are most of what makes
+    // the flight read as a real butterfly. Canvas top = forward, so the
+    // forewing's leading edge and the hindwing's tails point the right way.
+    const YELLOW = "#f0c838";
+    const WBLACK = "#1b1510";
+    function makeTexture(draw) {
       const c = document.createElement("canvas");
-      c.width = 256;
-      c.height = 256;
-      const g = c.getContext("2d");
-      g.clearRect(0, 0, 256, 256);
-      g.beginPath();
-      g.moveTo(8, 128);
-      g.bezierCurveTo(40, 20, 200, 0, 246, 60);
-      g.bezierCurveTo(250, 105, 190, 128, 120, 130);
-      g.bezierCurveTo(190, 150, 220, 180, 190, 220);
-      g.bezierCurveTo(140, 250, 40, 210, 8, 138);
-      g.closePath();
-      g.fillStyle = "#f4c531";
-      g.fill();
-      g.lineWidth = 10;
-      g.strokeStyle = "#2e2618";
-      g.stroke();
-      g.lineWidth = 3.5;
-      g.strokeStyle = "rgba(46,38,24,0.55)";
-      for (const [x, y] of [[210, 55], [230, 90], [170, 125], [180, 200], [120, 215]]) {
-        g.beginPath();
-        g.moveTo(14, 130);
-        g.quadraticCurveTo((x + 20) / 2, y * 0.8, x, y);
-        g.stroke();
-      }
-      g.fillStyle = "#2e2618";
-      g.beginPath();
-      g.arc(196, 78, 13, 0, Math.PI * 2);
-      g.fill();
-      g.fillStyle = "rgba(255,255,255,0.85)";
-      g.beginPath();
-      g.arc(200, 74, 4.5, 0, Math.PI * 2);
-      g.fill();
+      c.width = c.height = 256;
+      draw(c.getContext("2d"));
       const t = new THREE.CanvasTexture(c);
       t.colorSpace = THREE.SRGBColorSpace;
       return t;
     }
-    const butterfly = new THREE.Group();
-    const wingMap = wingTexture();
-    const wingMat = new THREE.MeshBasicMaterial({
-      map: wingMap,
-      transparent: true,
-      side: THREE.DoubleSide,
-      alphaTest: 0.15,
+    const foreMap = makeTexture((g) => {
+      g.beginPath();
+      g.moveTo(6, 168);
+      g.bezierCurveTo(20, 120, 90, 40, 238, 22);
+      g.bezierCurveTo(250, 70, 240, 130, 204, 168);
+      g.bezierCurveTo(160, 204, 60, 196, 6, 178);
+      g.closePath();
+      g.fillStyle = YELLOW;
+      g.fill();
+      g.save();
+      g.clip();
+      g.fillStyle = WBLACK;
+      // Tiger stripes angling back from the leading edge
+      const bar = (x0, w, len, lean) => {
+        g.beginPath();
+        g.moveTo(x0, 0);
+        g.lineTo(x0 + w, 0);
+        g.lineTo(x0 + w + lean, len);
+        g.lineTo(x0 + lean, len);
+        g.closePath();
+        g.fill();
+      };
+      bar(30, 18, 150, 6);
+      bar(76, 17, 128, 14);
+      bar(120, 16, 104, 20);
+      bar(162, 15, 78, 22);
+      g.strokeStyle = WBLACK;
+      // Leading-edge trim
+      g.beginPath();
+      g.moveTo(6, 168);
+      g.bezierCurveTo(20, 120, 90, 40, 238, 22);
+      g.lineWidth = 16;
+      g.stroke();
+      // Broad black outer margin…
+      g.beginPath();
+      g.moveTo(240, 24);
+      g.bezierCurveTo(250, 70, 240, 130, 204, 168);
+      g.bezierCurveTo(172, 196, 110, 200, 40, 190);
+      g.lineWidth = 46;
+      g.stroke();
+      // …with its row of yellow spots
+      g.fillStyle = YELLOW;
+      for (const [sx, sy] of [[236, 58], [232, 86], [222, 114], [206, 140], [184, 162], [156, 176], [124, 184], [92, 186]]) {
+        g.beginPath();
+        g.ellipse(sx, sy, 7.5, 5, -0.5, 0, Math.PI * 2);
+        g.fill();
+      }
+      g.restore();
     });
-    const wingGeomR = new THREE.PlaneGeometry(0.46, 0.46);
-    wingGeomR.rotateX(-Math.PI / 2);
-    wingGeomR.translate(0.23, 0, 0);
-    const wingGeomL = wingGeomR.clone();
-    wingGeomL.scale(-1, 1, 1);
-    const wingR = new THREE.Mesh(wingGeomR, wingMat);
-    const wingL = new THREE.Mesh(wingGeomL, wingMat);
-    butterfly.add(wingR, wingL);
+    const hindMap = makeTexture((g) => {
+      // Rounded fan, scalloped rear edge, one swallow tail.
+      g.beginPath();
+      g.moveTo(8, 34);
+      g.bezierCurveTo(90, 18, 180, 44, 216, 104);
+      g.bezierCurveTo(228, 140, 216, 172, 192, 190);
+      g.quadraticCurveTo(178, 212, 160, 198);
+      g.quadraticCurveTo(152, 238, 136, 252); // the tail
+      g.quadraticCurveTo(126, 222, 118, 202);
+      g.quadraticCurveTo(96, 214, 82, 196);
+      g.quadraticCurveTo(58, 200, 44, 178);
+      g.quadraticCurveTo(22, 150, 12, 110);
+      g.closePath();
+      g.fillStyle = YELLOW;
+      g.fill();
+      g.save();
+      g.clip();
+      g.fillStyle = WBLACK;
+      // Basal stripes continuing the forewing's, and body-side trim
+      g.fillRect(24, 0, 16, 96);
+      g.fillRect(64, 6, 14, 74);
+      g.fillRect(0, 0, 14, 200);
+      // Broad rear margin
+      g.strokeStyle = WBLACK;
+      g.beginPath();
+      g.moveTo(216, 104);
+      g.bezierCurveTo(228, 140, 216, 172, 192, 190);
+      g.quadraticCurveTo(178, 212, 160, 198);
+      g.quadraticCurveTo(152, 238, 136, 252);
+      g.quadraticCurveTo(126, 222, 118, 202);
+      g.quadraticCurveTo(96, 214, 82, 196);
+      g.quadraticCurveTo(58, 200, 44, 178);
+      g.lineWidth = 42;
+      g.stroke();
+      // Blue crescents inside the margin
+      g.fillStyle = "#5b8fc0";
+      for (const [bx, by] of [[196, 158], [172, 178], [144, 188], [114, 188], [86, 180], [60, 166]]) {
+        g.beginPath();
+        g.ellipse(bx, by, 9, 6, 0.4, 0, Math.PI * 2);
+        g.fill();
+      }
+      // Orange spot at the inner rear corner
+      g.fillStyle = "#e0762e";
+      g.beginPath();
+      g.ellipse(40, 158, 8, 7, 0, 0, Math.PI * 2);
+      g.fill();
+      // Yellow crescents along the very edge
+      g.fillStyle = YELLOW;
+      for (const [ex, ey] of [[210, 132], [200, 176], [166, 200], [100, 202], [58, 188]]) {
+        g.beginPath();
+        g.ellipse(ex, ey, 5, 3.5, 0.3, 0, Math.PI * 2);
+        g.fill();
+      }
+      g.restore();
+    });
+    const butterfly = new THREE.Group();
+    const wingMatOf = (map) =>
+      new THREE.MeshBasicMaterial({ map, transparent: true, side: THREE.DoubleSide, alphaTest: 0.15 });
+    const foreMat = wingMatOf(foreMap);
+    const hindMat = wingMatOf(hindMap);
+    function wingPair(w, zOff, material) {
+      const gR = new THREE.PlaneGeometry(w, w);
+      gR.rotateX(-Math.PI / 2);
+      gR.translate(w / 2, 0, zOff);
+      const gL = gR.clone();
+      gL.scale(-1, 1, 1);
+      return [new THREE.Mesh(gR, material), new THREE.Mesh(gL, material)];
+    }
+    const [foreR, foreL] = wingPair(0.5, -0.06, foreMat);
+    const [hindR, hindL] = wingPair(0.42, 0.13, hindMat);
+    hindR.position.y = hindL.position.y = -0.005; // forewings overlap hindwings
+    butterfly.add(foreR, foreL, hindR, hindL);
     const body = new THREE.Mesh(
-      new THREE.CapsuleGeometry(0.022, 0.3, 3, 6),
-      new THREE.MeshBasicMaterial({ color: "#2e2618" })
+      new THREE.CapsuleGeometry(0.024, 0.32, 3, 6),
+      new THREE.MeshBasicMaterial({ color: WBLACK })
     );
     body.rotation.x = Math.PI / 2;
     butterfly.add(body);
+    // Antennae, angled forward
+    const antGeom = new THREE.CylinderGeometry(0.004, 0.004, 0.16, 3);
+    const antMat = new THREE.MeshBasicMaterial({ color: WBLACK });
+    for (const s of [-1, 1]) {
+      const a = new THREE.Mesh(antGeom, antMat);
+      a.position.set(s * 0.045, 0.05, -0.24);
+      a.rotation.x = -Math.PI / 3;
+      a.rotation.z = s * 0.35;
+      butterfly.add(a);
+    }
     butterfly.position.set(0, 1.6, 1);
     scene.add(butterfly);
 
-    // --- Lightning ---
+    // --- Lightning: a jagged main channel with a couple of branches, the
+    // shape real strikes actually have. ---
     const boltMat = new THREE.LineBasicMaterial({ color: "#eef2ff", transparent: true, opacity: 0 });
-    let bolt = new THREE.Line(new THREE.BufferGeometry(), boltMat);
+    const bolt = new THREE.LineSegments(new THREE.BufferGeometry(), boltMat);
     scene.add(bolt);
     function rebuildBolt() {
-      const pts = [];
+      const segs = [];
       let x = -6 + Math.random() * 12;
-      let z = -8 + Math.random() * 3;
+      const z = -8 + Math.random() * 3;
       let y = 11;
-      pts.push(new THREE.Vector3(x, y, z));
-      while (y > 0.8) {
-        y -= 0.7 + Math.random() * 0.9;
-        x += (Math.random() - 0.5) * 1.4;
-        pts.push(new THREE.Vector3(x, y, z));
+      let px = x;
+      let py = y;
+      while (y > 0.6) {
+        y -= 0.6 + Math.random() * 0.8;
+        x += (Math.random() - 0.5) * 1.3;
+        segs.push(px, py, z, x, y, z);
+        if (Math.random() < 0.3 && y > 2.5) {
+          let bx = x;
+          let by = y;
+          const dir = Math.random() < 0.5 ? -1 : 1;
+          for (let k = 0; k < 3; k++) {
+            const nx = bx + dir * (0.3 + Math.random() * 0.5);
+            const ny = by - (0.4 + Math.random() * 0.5);
+            segs.push(bx, by, z, nx, ny, z);
+            bx = nx;
+            by = ny;
+          }
+        }
+        px = x;
+        py = y;
       }
       bolt.geometry.dispose();
-      bolt.geometry = new THREE.BufferGeometry().setFromPoints(pts);
+      bolt.geometry = new THREE.BufferGeometry();
+      bolt.geometry.setAttribute("position", new THREE.BufferAttribute(new Float32Array(segs), 3));
     }
 
     // --- Scroll → storm progress ---
@@ -487,14 +596,14 @@
         const d = c.userData;
         c.material.opacity = d.dayO + (d.stormO - d.dayO) * cloudIn;
         c.material.color.copy(d.low ? tmpColor2 : tmpColor);
-        if (flash > 0) c.material.color.lerp(flashColor, flash * (d.low ? 0.35 : 0.2));
+        if (flash > 0) c.material.color.lerp(flashColor, flash * (d.low ? 0.5 : 0.3));
         c.position.x += d.drift * dt * (0.4 + storm * 2.6);
         c.position.y = d.baseY - d.drop * cloudIn;
         if (c.position.x > 22) c.position.x = -22;
       }
 
       // Rain
-      rainMat.opacity = Math.max(0, (storm - 0.55) / 0.45) * (reduceMotion ? 0.25 : 0.45);
+      rainMat.opacity = Math.max(0, (storm - 0.55) / 0.45) * (reduceMotion ? 0.25 : 0.55);
       if (rainMat.opacity > 0) {
         const p = rainGeom.attributes.position.array;
         const fall = dt * (7.5 + storm * 6);
@@ -539,8 +648,13 @@
       const rawFlap = Math.sin(t * flapHz);
       // Downstroke faster than upstroke — the asymmetry sells the flight.
       const flap = (rawFlap > 0 ? Math.pow(rawFlap, 0.7) : rawFlap) * (0.95 + exit * 0.2);
-      wingR.rotation.z = flap;
-      wingL.rotation.z = -flap;
+      // Hindwings trail the forewings by a fraction of a beat.
+      const rawHind = Math.sin(t * flapHz - 0.5);
+      const flapH = (rawHind > 0 ? Math.pow(rawHind, 0.7) : rawHind) * (0.8 + exit * 0.2);
+      foreR.rotation.z = flap;
+      foreL.rotation.z = -flap;
+      hindR.rotation.z = flapH;
+      hindL.rotation.z = -flapH;
       butterfly.position.y += Math.abs(flap) * 0.04; // flap-linked bob
       // Bank into turns; tumble once the gust has it.
       const heading = Math.atan2(Math.cos(t * 0.45) * 0.68, -Math.sin(t * 0.3) * 0.21);
@@ -548,11 +662,13 @@
       butterfly.rotation.z =
         Math.sin(t * 0.9) * 0.14 * (1 + agitation) + exit * Math.sin(t * 14) * 0.6;
 
-      // Camera: a slow breath; pulls back slightly as the storm grows.
-      camera.position.x = Math.sin(t * 0.05) * 0.25;
+      // Camera: a slow breath; pulls back slightly as the storm grows, and
+      // shudders for an instant on each strike.
+      camera.position.x = Math.sin(t * 0.05) * 0.25 + flash * 0.05 * Math.sin(t * 70);
       camera.position.y = 1.6 + storm * 0.25;
       camera.position.z = 6 + storm * 0.8;
       camera.lookAt(0, 1.35, 0);
+      if (vignetteEl) vignetteEl.style.opacity = storm * 0.6;
 
       cardEls.forEach((el, i) => {
         if (!el) return;
@@ -579,7 +695,9 @@
       rainMat.dispose();
       bolt.geometry.dispose();
       boltMat.dispose();
-      wingMap.dispose();
+      foreMap.dispose();
+      hindMap.dispose();
+      antGeom.dispose();
       puffTex.dispose();
     };
   });
@@ -603,6 +721,7 @@
       </div>
     {:else}
       <canvas bind:this={canvas} aria-hidden="true"></canvas>
+      <div class="vignette" bind:this={vignetteEl} aria-hidden="true"></div>
       {#each cards as card, i}
         <div class="hero3d-card" class:title-card={card.title} bind:this={cardEls[i]}>
           {#if card.eyebrow}<p class="eyebrow">{card.eyebrow}</p>{/if}
@@ -634,6 +753,13 @@
     display: block;
     width: 100%;
     height: 100%;
+  }
+  .vignette {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    opacity: 0;
+    background: radial-gradient(ellipse at center, transparent 45%, rgba(5, 8, 14, 0.55) 100%);
   }
   .hero3d-card {
     position: absolute;
