@@ -302,16 +302,18 @@
     addCluster(12, 8.5, -12, 6, 9, 8, false);
     addCluster(-5, 7.5, -10, 5, 10, 7, false);
 
-    // --- Rain: slanted streaks whose lean follows the wind. ---
+    // --- Rain: streaks whose slant equals the drops' actual velocity
+    // ratio (drift ÷ fall), so what you see matches how they move. Heavy
+    // rain falls fast — near-vertical, with only a slight wind lean. ---
     const RAIN = 1700;
-    const STREAK = 0.3;
+    const STREAK = 0.34;
     const rainGeom = new THREE.BufferGeometry();
     const rainPos = new Float32Array(RAIN * 6);
     for (let i = 0; i < RAIN; i++) {
       const x = -10 + Math.random() * 20;
       const yy = Math.random() * 12;
       const z = -7 + Math.random() * 12;
-      rainPos.set([x, yy, z, x + 0.06, yy + STREAK, z], i * 6);
+      rainPos.set([x, yy, z, x, yy + STREAK, z], i * 6);
     }
     rainGeom.setAttribute("position", new THREE.BufferAttribute(rainPos, 3));
     const rainMat = new THREE.LineBasicMaterial({
@@ -607,24 +609,28 @@
       rainMat.opacity = Math.max(0, (storm - 0.55) / 0.45) * (reduceMotion ? 0.25 : 0.55);
       if (rainMat.opacity > 0) {
         const p = rainGeom.attributes.position.array;
-        const fall = dt * (7.5 + storm * 6);
-        const drift = dt * storm * 2.6;
-        const lean = 0.06 + storm * 0.14; // streak slant follows the wind
+        const fallSpeed = 9 + storm * 6;
+        const driftSpeed = storm * 2.2;
+        const fall = dt * fallSpeed;
+        const drift = dt * driftSpeed;
+        // Slant = the drops' real velocity ratio, so streaks point exactly
+        // along their motion (≈8° off vertical at full storm, not sideways).
+        const lean = STREAK * (driftSpeed / fallSpeed);
         for (let i = 0; i < RAIN; i++) {
           const o = i * 6;
           const dy = fall * (0.8 + ((i * 37) % 10) / 18);
           p[o + 1] -= dy;
           p[o + 4] -= dy;
           p[o] += drift;
-          p[o + 3] += drift;
-          p[o + 3] = p[o] + lean;
+          // Tail trails along where the drop came from: up and upwind.
+          p[o + 3] = p[o] - lean;
           p[o + 4] = p[o + 1] + STREAK;
           if (p[o + 1] < 0) {
             const x = -10 + Math.random() * 20;
             const yy = 11 + Math.random();
             p[o] = x;
             p[o + 1] = yy;
-            p[o + 3] = x + lean;
+            p[o + 3] = x - lean;
             p[o + 4] = yy + STREAK;
           }
           if (p[o] > 10) {
