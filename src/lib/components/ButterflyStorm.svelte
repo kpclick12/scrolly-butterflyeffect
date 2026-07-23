@@ -2,55 +2,48 @@
   import { onMount } from "svelte";
   import * as THREE from "three";
 
-  // Scroll-driven 3D prologue: a yellow butterfly over a sunlit meadow that
-  // the reader scrolls into a full thunderstorm. Everything is procedural —
-  // no model files — so the whole scene ships as code.
-  //
-  // One number drives it all: `storm` in [0,1], eased toward the reader's
-  // scroll position through the tall wrapper. Sky, fog, grass color, wind
-  // strength, cloud cover, rain density, lightning and the butterfly's
-  // behavior all read that single value, so scrubbing the scrollbar scrubs
-  // the weather.
+  // Scroll-driven 3D prologue, kept wordless on purpose: a yellow butterfly
+  // over a summer meadow, then the storm that takes the scene from it. One
+  // eased value drives everything — `storm` in [0,1], following the reader's
+  // scroll — so scrubbing the scrollbar scrubs the weather:
+  //   0.00–0.25  summer day, light clouds drifting
+  //   0.25–0.55  clouds cluster and darken, sun fades, wind rises
+  //   0.55–0.75  first rain, the meadow goes grey-green
+  //   0.75–0.92  lightning; a gust carries the butterfly out of the scene
+  //   0.92–1.00  the storm has the meadow to itself
+  // All geometry is procedural — no model files.
 
   let wrap;
   let canvas;
   let cardEls = [];
   let webglFailed = $state(false);
 
-  // Overlay copy: [start, end] are storm-progress bands, faded at the edges.
+  // Two cards only: the title, and a single line that hands over to Act One.
   const cards = [
     {
-      band: [0.0, 0.16],
+      band: [0.0, 0.14],
       eyebrow: "A visual essay on Europe's new extreme weather",
-      title: "The Flap of a Wing",
-      body: "A meadow, a butterfly, a perfect summer day. Keep scrolling.",
+      title: "The Flap of a Wing",
       hint: true,
     },
     {
-      band: [0.24, 0.42],
-      quote:
-        "“Does the flap of a butterfly's wings in Brazil set off a tornado in Texas?”",
-      cite: "Edward Lorenz, meteorologist, 1972",
-    },
-    {
-      band: [0.5, 0.68],
-      body:
-        "Lorenz's point was not about butterflies. It was that in a chaotic system — and weather is the textbook example — a change almost too small to measure can transform everything downstream.",
-    },
-    {
-      band: [0.78, 0.96],
-      body:
-        "Europe's atmosphere has been given its own nudge: about 2.5 °C of warming since pre-industrial times, more than any other continent. This is the story of what that flap set off.",
+      band: [0.86, 1.01],
+      body: "First the butterfly. Then the storm. Europe's atmosphere has been nudged by 2.5 °C — this is the story of what followed.",
     },
   ];
 
   function bandOpacity(p, [a, b]) {
-    const fade = 0.055;
+    const fade = 0.05;
     if (p <= a - fade || p >= b + fade) return 0;
     if (p < a) return (p - (a - fade)) / fade;
     if (p > b) return (b + fade - p) / fade;
     return 1;
   }
+
+  const smooth = (a, b, x) => {
+    const t = Math.min(1, Math.max(0, (x - a) / (b - a)));
+    return t * t * (3 - 2 * t);
+  };
 
   onMount(() => {
     const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -65,39 +58,86 @@
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.75));
 
     const scene = new THREE.Scene();
-    const camera = new THREE.PerspectiveCamera(50, 1, 0.1, 60);
+    const camera = new THREE.PerspectiveCamera(50, 1, 0.1, 90);
     camera.position.set(0, 1.6, 6);
 
     // --- Palette endpoints: everything lerps between "day" and "storm". ---
-    const daySky = new THREE.Color("#8ec8ee");
-    const stormSky = new THREE.Color("#141c2a");
-    const flashSky = new THREE.Color("#cdd7e8");
-    const dayGround = new THREE.Color("#6c9c50");
-    const stormGround = new THREE.Color("#1b2418");
-    const dayBase = new THREE.Color("#3d7a2f");
-    const dayTip = new THREE.Color("#a3d05f");
-    const stormBase = new THREE.Color("#17250f");
-    const stormTip = new THREE.Color("#41562e");
-    const dayCloud = new THREE.Color("#f2f7fb");
-    const stormCloud = new THREE.Color("#232e40");
+    const dayZenith = new THREE.Color("#4f9fe6");
+    const dayHorizon = new THREE.Color("#d9edf9");
+    const stormZenith = new THREE.Color("#10161f");
+    const stormHorizon = new THREE.Color("#49525a"); // grey with a sick green cast
+    const flashColor = new THREE.Color("#dfe6f2");
+    const dayGround = new THREE.Color("#74a355");
+    const stormGround = new THREE.Color("#1e2a1c");
+    const dayBase = new THREE.Color("#40803a");
+    const dayTip = new THREE.Color("#a8d468");
+    const stormBase = new THREE.Color("#1a2a14");
+    const stormTip = new THREE.Color("#4a5c35");
 
-    scene.background = daySky.clone();
+    // --- Sky: a gradient dome, not a flat color — the horizon stays lighter
+    // than the zenith in both weathers, which is most of what makes a sky
+    // read as real. ---
+    const skyUniforms = {
+      uStorm: { value: 0 },
+      uFlash: { value: 0 },
+      uDayZen: { value: dayZenith },
+      uDayHor: { value: dayHorizon },
+      uStormZen: { value: stormZenith },
+      uStormHor: { value: stormHorizon },
+      uFlashCol: { value: flashColor },
+      uSunDir: { value: new THREE.Vector3(-0.45, 0.55, -0.7).normalize() },
+    };
+    const sky = new THREE.Mesh(
+      new THREE.SphereGeometry(60, 24, 16),
+      new THREE.ShaderMaterial({
+        side: THREE.BackSide,
+        depthWrite: false,
+        uniforms: skyUniforms,
+        vertexShader: `
+          varying vec3 vDir;
+          void main() {
+            vDir = normalize(position);
+            gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+          }
+        `,
+        fragmentShader: `
+          uniform float uStorm;
+          uniform float uFlash;
+          uniform vec3 uDayZen; uniform vec3 uDayHor;
+          uniform vec3 uStormZen; uniform vec3 uStormHor;
+          uniform vec3 uFlashCol;
+          uniform vec3 uSunDir;
+          varying vec3 vDir;
+          void main() {
+            float h = clamp(vDir.y, 0.0, 1.0);
+            float g = pow(h, 0.55);
+            vec3 day = mix(uDayHor, uDayZen, g);
+            // Warm haze around the sun while it is still out.
+            float sunGlow = pow(max(dot(normalize(vDir), uSunDir), 0.0), 6.0);
+            day += vec3(0.28, 0.2, 0.05) * sunGlow * (1.0 - uStorm);
+            vec3 storm = mix(uStormHor, uStormZen, g);
+            vec3 c = mix(day, storm, uStorm);
+            c = mix(c, uFlashCol, uFlash * 0.55);
+            gl_FragColor = vec4(c, 1.0);
+          }
+        `,
+      })
+    );
+    scene.add(sky);
 
     // --- Ground ---
     const ground = new THREE.Mesh(
-      new THREE.CircleGeometry(40, 40),
+      new THREE.CircleGeometry(50, 40),
       new THREE.MeshBasicMaterial({ color: dayGround.clone() })
     );
     ground.rotation.x = -Math.PI / 2;
     scene.add(ground);
 
-    // --- Grass: one instanced draw call, wind computed in the vertex shader
-    // so thousands of blades sway without touching a matrix per frame. ---
-    const BLADES = window.innerWidth < 700 ? 1100 : 2200;
+    // --- Grass: one instanced draw call, wind in the vertex shader. ---
+    const BLADES = window.innerWidth < 700 ? 1200 : 2400;
     const blade = new THREE.PlaneGeometry(0.055, 1, 1, 4);
     blade.translate(0, 0.5, 0);
     {
-      // Taper toward the tip and lean the blade forward slightly.
       const pos = blade.attributes.position;
       for (let i = 0; i < pos.count; i++) {
         const y = pos.getY(i);
@@ -110,7 +150,7 @@
       uWind: { value: 0 },
       uBase: { value: dayBase.clone() },
       uTip: { value: dayTip.clone() },
-      uFog: { value: daySky.clone() },
+      uFog: { value: dayHorizon.clone() },
     };
     const grassMat = new THREE.ShaderMaterial({
       uniforms: grassUniforms,
@@ -121,14 +161,18 @@
         attribute float aPhase;
         varying float vH;
         varying float vDepth;
+        varying float vShade;
         void main() {
           vH = uv.y;
+          vShade = 0.88 + 0.24 * fract(aPhase * 7.13);
           vec4 world = instanceMatrix * vec4(position, 1.0);
           float bend = vH * vH;
-          float sway = sin(uTime * (1.6 + uWind * 5.0) + aPhase) * (0.05 + uWind * 0.38);
-          float gust = sin(uTime * 0.6 + aPhase * 0.37) * uWind * 0.22;
+          // Gusty wind: a base sway plus a slower traveling gust front, both
+          // leaning the same way so the whole meadow streams with the storm.
+          float sway = sin(uTime * (1.6 + uWind * 5.0) + aPhase) * (0.05 + uWind * 0.3);
+          float gust = (0.5 + 0.5 * sin(uTime * 0.9 + world.x * 0.4 + aPhase * 0.3)) * uWind * 0.45;
           world.x += (sway + gust) * bend;
-          world.z += cos(uTime * (1.1 + uWind * 4.2) + aPhase * 1.7) * (0.03 + uWind * 0.2) * bend;
+          world.z += cos(uTime * (1.1 + uWind * 4.2) + aPhase * 1.7) * (0.03 + uWind * 0.16) * bend;
           vec4 view = viewMatrix * world;
           vDepth = -view.z;
           gl_Position = projectionMatrix * view;
@@ -140,9 +184,10 @@
         uniform vec3 uFog;
         varying float vH;
         varying float vDepth;
+        varying float vShade;
         void main() {
-          vec3 c = mix(uBase, uTip, vH);
-          float f = smoothstep(9.0, 30.0, vDepth);
+          vec3 c = mix(uBase, uTip, vH) * vShade;
+          float f = smoothstep(9.0, 34.0, vDepth);
           gl_FragColor = vec4(mix(c, uFog, f), 1.0);
         }
       `,
@@ -154,13 +199,12 @@
       const up = new THREE.Vector3(0, 1, 0);
       const phases = new Float32Array(BLADES);
       for (let i = 0; i < BLADES; i++) {
-        // Denser near the camera, thinning with distance.
-        const r = Math.pow(Math.random(), 0.65) * 16;
+        const r = Math.pow(Math.random(), 0.65) * 18;
         const a = Math.random() * Math.PI * 2;
         const x = Math.sin(a) * r;
         const z = Math.cos(a) * r * 0.75 + 1.5;
+        phases[i] = Math.random() * Math.PI * 2;
         if (z > 5.6) {
-          phases[i] = Math.random() * Math.PI * 2;
           m.makeScale(0, 0, 0); // behind the camera — collapse instead of draw
           grass.setMatrixAt(i, m);
           continue;
@@ -169,13 +213,12 @@
         const s = 0.55 + Math.random() * 0.8;
         m.compose(new THREE.Vector3(x, 0, z), q, new THREE.Vector3(1, s, 1));
         grass.setMatrixAt(i, m);
-        phases[i] = Math.random() * Math.PI * 2;
       }
       blade.setAttribute("aPhase", new THREE.InstancedBufferAttribute(phases, 1));
     }
     scene.add(grass);
 
-    // --- A few flowers so the meadow reads "alive" before the storm. ---
+    // --- Flowers ---
     const flowers = new THREE.Group();
     {
       const petal = new THREE.CircleGeometry(0.05, 8);
@@ -193,7 +236,7 @@
     }
     scene.add(flowers);
 
-    // --- Sun: a soft radial glow that the storm swallows. ---
+    // --- Sun ---
     function glowTexture(inner, outer) {
       const c = document.createElement("canvas");
       c.width = c.height = 256;
@@ -209,50 +252,69 @@
     }
     const sun = new THREE.Sprite(
       new THREE.SpriteMaterial({
-        map: glowTexture("rgba(255,244,200,1)", "rgba(255,244,200,0)"),
+        map: glowTexture("rgba(255,246,214,1)", "rgba(255,246,214,0)"),
         transparent: true,
         depthWrite: false,
       })
     );
-    sun.position.set(-5.5, 7.5, -9);
-    sun.scale.setScalar(7);
+    sun.position.set(-9, 11, -14);
+    sun.scale.setScalar(9);
     scene.add(sun);
 
-    // --- Clouds: billboarded soft blobs that thicken and darken. ---
-    const cloudTex = glowTexture("rgba(255,255,255,0.95)", "rgba(255,255,255,0)");
-    const clouds = [];
-    for (let i = 0; i < 10; i++) {
-      const s = new THREE.Sprite(
-        new THREE.SpriteMaterial({
-          map: cloudTex,
-          transparent: true,
-          opacity: 0,
-          depthWrite: false,
-          color: dayCloud.clone(),
-        })
-      );
-      s.position.set(-14 + Math.random() * 28, 5.5 + Math.random() * 3.5, -8 - Math.random() * 4);
-      s.scale.set(9 + Math.random() * 8, 4.5 + Math.random() * 3, 1);
-      s.userData.drift = 0.1 + Math.random() * 0.25;
-      scene.add(s);
-      clouds.push(s);
+    // --- Clouds: clusters of soft puffs. A few live in the day sky from the
+    // start (an empty blue sky reads fake); the storm adds more, drops them
+    // lower, and darkens their bases into a deck. ---
+    const puffTex = glowTexture("rgba(255,255,255,0.9)", "rgba(255,255,255,0)");
+    const dayCloudCol = new THREE.Color("#ffffff");
+    const stormCloudTop = new THREE.Color("#39424e");
+    const stormCloudBase = new THREE.Color("#20262e");
+    const puffs = [];
+    function addCluster(cx, cy, cz, n, spread, scale, dayVisible) {
+      for (let i = 0; i < n; i++) {
+        const s = new THREE.Sprite(
+          new THREE.SpriteMaterial({ map: puffTex, transparent: true, opacity: 0, depthWrite: false })
+        );
+        const ox = (Math.random() - 0.5) * spread;
+        const oy = (Math.random() - 0.5) * spread * 0.3;
+        s.position.set(cx + ox, cy + oy, cz + (Math.random() - 0.5) * 2);
+        const sc = scale * (0.7 + Math.random() * 0.6);
+        s.scale.set(sc, sc * 0.5, 1);
+        s.userData = {
+          drift: 0.08 + Math.random() * 0.2,
+          dayO: dayVisible ? 0.5 + Math.random() * 0.25 : 0,
+          stormO: 0.85 + Math.random() * 0.15,
+          low: oy < 0, // lower puffs get the darker storm base color
+          baseY: cy + oy,
+          drop: dayVisible ? 1.5 : 2.5 + Math.random() * 1.5,
+        };
+        scene.add(s);
+        puffs.push(s);
+      }
     }
+    // Fair-weather clouds
+    addCluster(-10, 10, -16, 4, 6, 6, true);
+    addCluster(7, 12, -18, 5, 7, 7, true);
+    addCluster(16, 9, -15, 3, 5, 5, true);
+    // Storm-only clusters — the deck that rolls in
+    addCluster(-16, 9, -13, 6, 9, 8, false);
+    addCluster(0, 10, -14, 7, 12, 9, false);
+    addCluster(12, 8.5, -12, 6, 9, 8, false);
+    addCluster(-5, 7.5, -10, 5, 10, 7, false);
 
-    // --- Rain: short vertical streaks (line segments read as falling rain
-    // where round points read as static specks). ---
-    const RAIN = 1600;
-    const STREAK = 0.28;
+    // --- Rain: slanted streaks whose lean follows the wind. ---
+    const RAIN = 1700;
+    const STREAK = 0.3;
     const rainGeom = new THREE.BufferGeometry();
     const rainPos = new Float32Array(RAIN * 6);
     for (let i = 0; i < RAIN; i++) {
-      const x = -9 + Math.random() * 18;
-      const yy = Math.random() * 11;
-      const z = -6 + Math.random() * 11;
-      rainPos.set([x, yy, z, x + 0.04, yy + STREAK, z], i * 6);
+      const x = -10 + Math.random() * 20;
+      const yy = Math.random() * 12;
+      const z = -7 + Math.random() * 12;
+      rainPos.set([x, yy, z, x + 0.06, yy + STREAK, z], i * 6);
     }
     rainGeom.setAttribute("position", new THREE.BufferAttribute(rainPos, 3));
     const rainMat = new THREE.LineBasicMaterial({
-      color: "#a9c2d8",
+      color: "#aebfcf",
       transparent: true,
       opacity: 0,
       depthWrite: false,
@@ -260,14 +322,13 @@
     const rain = new THREE.LineSegments(rainGeom, rainMat);
     scene.add(rain);
 
-    // --- Butterfly: canvas-painted wings on two hinged planes. ---
+    // --- Butterfly ---
     function wingTexture() {
       const c = document.createElement("canvas");
       c.width = 256;
       c.height = 256;
       const g = c.getContext("2d");
       g.clearRect(0, 0, 256, 256);
-      // Forewing + hindwing silhouette, hinge at the left edge, pointing +x.
       g.beginPath();
       g.moveTo(8, 128);
       g.bezierCurveTo(40, 20, 200, 0, 246, 60);
@@ -280,7 +341,6 @@
       g.lineWidth = 10;
       g.strokeStyle = "#2e2618";
       g.stroke();
-      // Veins
       g.lineWidth = 3.5;
       g.strokeStyle = "rgba(46,38,24,0.55)";
       for (const [x, y] of [[210, 55], [230, 90], [170, 125], [180, 200], [120, 215]]) {
@@ -289,7 +349,6 @@
         g.quadraticCurveTo((x + 20) / 2, y * 0.8, x, y);
         g.stroke();
       }
-      // Spots
       g.fillStyle = "#2e2618";
       g.beginPath();
       g.arc(196, 78, 13, 0, Math.PI * 2);
@@ -310,8 +369,6 @@
       side: THREE.DoubleSide,
       alphaTest: 0.15,
     });
-    // Wing planes lie flat (XZ); flapping rotates them around the body's
-    // forward axis (z). Geometry is shifted so the hinge sits at x = 0.
     const wingGeomR = new THREE.PlaneGeometry(0.46, 0.46);
     wingGeomR.rotateX(-Math.PI / 2);
     wingGeomR.translate(0.23, 0, 0);
@@ -329,15 +386,15 @@
     butterfly.position.set(0, 1.6, 1);
     scene.add(butterfly);
 
-    // --- Lightning: a jagged polyline, regenerated per flash. ---
+    // --- Lightning ---
     const boltMat = new THREE.LineBasicMaterial({ color: "#eef2ff", transparent: true, opacity: 0 });
     let bolt = new THREE.Line(new THREE.BufferGeometry(), boltMat);
     scene.add(bolt);
     function rebuildBolt() {
       const pts = [];
       let x = -6 + Math.random() * 12;
-      let z = -7 + Math.random() * 3;
-      let y = 10;
+      let z = -8 + Math.random() * 3;
+      let y = 11;
       pts.push(new THREE.Vector3(x, y, z));
       while (y > 0.8) {
         y -= 0.7 + Math.random() * 0.9;
@@ -369,18 +426,17 @@
     window.addEventListener("resize", resize);
     resize();
 
-    // Only render while the hero is on screen.
     let visible = true;
     const io = new IntersectionObserver(([e]) => (visible = e.isIntersecting));
     io.observe(wrap);
 
     const clock = new THREE.Clock();
     let elapsed = 0;
-    let flash = 0;
-    let nextFlashIn = 2;
+    let flashT = -1; // time within the current flash envelope; -1 = idle
+    let nextFlashIn = 1.5;
     let raf;
-    const skyNow = new THREE.Color();
     const tmpColor = new THREE.Color();
+    const tmpColor2 = new THREE.Color();
 
     function frame() {
       raf = requestAnimationFrame(frame);
@@ -390,36 +446,60 @@
       storm += (targetStorm - storm) * Math.min(1, dt * 5);
       const t = elapsed;
 
+      // Lightning: a two-pulse flicker, the way real strikes re-strike.
+      let flash = 0;
+      if (!reduceMotion && storm > 0.72) {
+        nextFlashIn -= dt;
+        if (nextFlashIn <= 0 && flashT < 0) {
+          rebuildBolt();
+          flashT = 0;
+          nextFlashIn = 2 + Math.random() * 3.5;
+        }
+      }
+      if (flashT >= 0) {
+        flashT += dt;
+        const e1 = Math.max(0, 1 - flashT / 0.12);
+        const e2 = flashT > 0.16 ? Math.max(0, 1 - (flashT - 0.16) / 0.2) : 0;
+        flash = Math.max(e1, e2 * 0.7);
+        if (flashT > 0.4) flashT = -1;
+      }
+
       // Atmosphere
-      skyNow.copy(daySky).lerp(stormSky, storm);
-      if (flash > 0) skyNow.lerp(flashSky, flash * 0.55);
-      scene.background.copy(skyNow);
-      grassUniforms.uFog.value.copy(skyNow);
+      skyUniforms.uStorm.value = storm;
+      skyUniforms.uFlash.value = flash;
+      grassUniforms.uFog.value.copy(dayHorizon).lerp(stormHorizon, storm);
       grassUniforms.uTime.value = t;
-      grassUniforms.uWind.value = reduceMotion ? storm * 0.25 : storm;
+      grassUniforms.uWind.value = (reduceMotion ? 0.25 : 1) * smooth(0.2, 0.85, storm);
       grassUniforms.uBase.value.copy(dayBase).lerp(stormBase, storm);
       grassUniforms.uTip.value.copy(dayTip).lerp(stormTip, storm);
       ground.material.color.copy(dayGround).lerp(stormGround, storm);
-      sun.material.opacity = Math.max(0, 1 - storm * 1.7);
+      if (flash > 0) ground.material.color.lerp(flashColor, flash * 0.12);
+      sun.material.opacity = Math.max(0, 1 - storm * 2.2);
       flowers.children.forEach((f, i) => {
-        f.rotation.z = Math.sin(t * 1.3 + i) * (0.05 + storm * 0.3);
+        f.rotation.z = Math.sin(t * 1.3 + i) * (0.05 + storm * 0.35);
       });
 
       // Clouds
-      tmpColor.copy(dayCloud).lerp(stormCloud, storm);
-      for (const c of clouds) {
-        c.material.opacity = Math.min(0.95, Math.max(0, (storm - 0.08) * 1.6));
-        c.material.color.copy(tmpColor);
-        c.position.x += c.userData.drift * dt * (0.4 + storm * 2.4);
-        if (c.position.x > 16) c.position.x = -16;
+      const cloudIn = smooth(0.12, 0.6, storm);
+      tmpColor.copy(dayCloudCol).lerp(stormCloudTop, storm);
+      tmpColor2.copy(dayCloudCol).lerp(stormCloudBase, storm);
+      for (const c of puffs) {
+        const d = c.userData;
+        c.material.opacity = d.dayO + (d.stormO - d.dayO) * cloudIn;
+        c.material.color.copy(d.low ? tmpColor2 : tmpColor);
+        if (flash > 0) c.material.color.lerp(flashColor, flash * (d.low ? 0.35 : 0.2));
+        c.position.x += d.drift * dt * (0.4 + storm * 2.6);
+        c.position.y = d.baseY - d.drop * cloudIn;
+        if (c.position.x > 22) c.position.x = -22;
       }
 
       // Rain
       rainMat.opacity = Math.max(0, (storm - 0.55) / 0.45) * (reduceMotion ? 0.25 : 0.45);
       if (rainMat.opacity > 0) {
         const p = rainGeom.attributes.position.array;
-        const fall = dt * (7 + storm * 6);
-        const drift = dt * storm * 2.2;
+        const fall = dt * (7.5 + storm * 6);
+        const drift = dt * storm * 2.6;
+        const lean = 0.06 + storm * 0.14; // streak slant follows the wind
         for (let i = 0; i < RAIN; i++) {
           const o = i * 6;
           const dy = fall * (0.8 + ((i * 37) % 10) / 18);
@@ -427,57 +507,53 @@
           p[o + 4] -= dy;
           p[o] += drift;
           p[o + 3] += drift;
+          p[o + 3] = p[o] + lean;
+          p[o + 4] = p[o + 1] + STREAK;
           if (p[o + 1] < 0) {
-            const x = -9 + Math.random() * 18;
-            const yy = 10 + Math.random();
+            const x = -10 + Math.random() * 20;
+            const yy = 11 + Math.random();
             p[o] = x;
             p[o + 1] = yy;
-            p[o + 3] = x + 0.04;
+            p[o + 3] = x + lean;
             p[o + 4] = yy + STREAK;
           }
-          if (p[o] > 9) {
-            p[o] -= 18;
-            p[o + 3] -= 18;
+          if (p[o] > 10) {
+            p[o] -= 20;
+            p[o + 3] -= 20;
           }
         }
         rainGeom.attributes.position.needsUpdate = true;
       }
+      boltMat.opacity = flash;
 
-      // Lightning
-      if (!reduceMotion && storm > 0.72) {
-        nextFlashIn -= dt;
-        if (nextFlashIn <= 0) {
-          rebuildBolt();
-          flash = 1;
-          nextFlashIn = 1.8 + Math.random() * 3.2;
-        }
-      }
-      flash = Math.max(0, flash - dt * 3.2);
-      boltMat.opacity = flash > 0.55 ? (flash - 0.55) * 2.2 : 0;
-
-      // Butterfly: carefree loops in the sun; buffeted as wind rises; drops
-      // into the grass to shelter as the storm peaks.
-      const shelter = Math.max(0, (storm - 0.78) / 0.22);
-      const agitation = storm * (1 - shelter);
-      const fx = Math.sin(t * 0.45) * 1.5 + Math.sin(t * 1.7) * 0.15 * agitation * 4;
-      const fy =
-        1.55 + Math.sin(t * 1.1) * (0.3 + agitation * 0.35) - shelter * 1.15;
-      const fz = 0.9 + Math.cos(t * 0.3) * 0.7;
-      butterfly.position.set(fx, Math.max(0.42, fy), fz);
-      const flapHz = 9 + agitation * 7 - shelter * 5.5;
-      const flap = Math.sin(t * flapHz) * (0.95 - shelter * 0.55);
+      // Butterfly: a calm wandering flight while the day lasts; buffeted as
+      // the wind rises; finally caught by a gust and carried out of frame.
+      const agitation = smooth(0.3, 0.75, storm);
+      const exit = smooth(0.78, 0.93, storm);
+      const fx = Math.sin(t * 0.45) * 1.5 + Math.sin(t * 1.7) * 0.5 * agitation + exit * exit * 14;
+      const fy = 1.55 + Math.sin(t * 1.1) * (0.3 + agitation * 0.3) + exit * 3.2;
+      const fz = 0.9 + Math.cos(t * 0.3) * 0.7 - exit * 2;
+      butterfly.visible = exit < 1;
+      butterfly.position.set(fx, fy, fz);
+      const flapHz = 9 + agitation * 6 + exit * 8;
+      const rawFlap = Math.sin(t * flapHz);
+      // Downstroke faster than upstroke — the asymmetry sells the flight.
+      const flap = (rawFlap > 0 ? Math.pow(rawFlap, 0.7) : rawFlap) * (0.95 + exit * 0.2);
       wingR.rotation.z = flap;
       wingL.rotation.z = -flap;
-      butterfly.rotation.y = Math.atan2(Math.cos(t * 0.45) * 1.5 * 0.45, -Math.sin(t * 0.3) * 0.7 * 0.3);
-      butterfly.rotation.z = Math.sin(t * 0.9) * 0.12 * (1 + agitation * 2);
+      butterfly.position.y += Math.abs(flap) * 0.04; // flap-linked bob
+      // Bank into turns; tumble once the gust has it.
+      const heading = Math.atan2(Math.cos(t * 0.45) * 0.68, -Math.sin(t * 0.3) * 0.21);
+      butterfly.rotation.y = heading;
+      butterfly.rotation.z =
+        Math.sin(t * 0.9) * 0.14 * (1 + agitation) + exit * Math.sin(t * 14) * 0.6;
 
-      // Camera: a slow breath, plus a slight pull-back as the storm grows.
+      // Camera: a slow breath; pulls back slightly as the storm grows.
       camera.position.x = Math.sin(t * 0.05) * 0.25;
       camera.position.y = 1.6 + storm * 0.25;
       camera.position.z = 6 + storm * 0.8;
       camera.lookAt(0, 1.35, 0);
 
-      // Overlay cards follow the same storm value.
       cardEls.forEach((el, i) => {
         if (!el) return;
         const o = bandOpacity(storm, cards[i].band);
@@ -497,12 +573,14 @@
       renderer.dispose();
       blade.dispose();
       grassMat.dispose();
+      sky.geometry.dispose();
+      sky.material.dispose();
       rainGeom.dispose();
       rainMat.dispose();
       bolt.geometry.dispose();
       boltMat.dispose();
       wingMap.dispose();
-      cloudTex.dispose();
+      puffTex.dispose();
     };
   });
 </script>
@@ -511,7 +589,7 @@
   class="hero3d"
   bind:this={wrap}
   role="img"
-  aria-label="Animated scene: a yellow butterfly flutters over a sunny meadow. As you scroll, clouds gather, wind bends the grass, rain falls and lightning flashes — the meadow becomes a thunderstorm."
+  aria-label="Animated scene: a yellow butterfly flutters over a sunny meadow. As you scroll, clouds gather and darken, wind bends the grass, rain slants in and lightning flashes — a gust carries the butterfly away and the meadow becomes a thunderstorm."
 >
   <div class="hero3d-sticky">
     {#if webglFailed}
@@ -529,7 +607,6 @@
         <div class="hero3d-card" class:title-card={card.title} bind:this={cardEls[i]}>
           {#if card.eyebrow}<p class="eyebrow">{card.eyebrow}</p>{/if}
           {#if card.title}<h1>{card.title}</h1>{/if}
-          {#if card.quote}<blockquote><p class="quote">{card.quote}</p><cite>— {card.cite}</cite></blockquote>{/if}
           {#if card.body}<p class="card-body">{card.body}</p>{/if}
           {#if card.hint}<p class="scroll-hint">Scroll<span class="scroll-tick">|</span></p>{/if}
         </div>
@@ -540,9 +617,10 @@
 
 <style>
   .hero3d {
-    /* Tall scroll runway: the sticky viewport inside plays the storm as the
-       reader moves through it. */
-    height: 460svh;
+    /* Scroll runway: the sticky viewport inside plays the storm as the
+       reader moves through it. Short enough to stay one clean beat —
+       butterfly, then storm. */
+    height: 320svh;
     position: relative;
   }
   .hero3d-sticky {
@@ -589,6 +667,7 @@
     color: var(--hero-gold);
     font-weight: 700;
     margin: 0 0 18px;
+    text-shadow: 0 1px 10px rgba(12, 22, 38, 0.5);
   }
   h1 {
     font-family: var(--serif);
@@ -600,27 +679,6 @@
     color: #ffffff;
     text-shadow: 0 2px 24px rgba(12, 22, 38, 0.55);
   }
-  .title-card .card-body {
-    color: rgba(255, 255, 255, 0.95);
-    text-shadow: 0 1px 12px rgba(12, 22, 38, 0.65);
-  }
-  blockquote {
-    margin: 0;
-  }
-  .quote {
-    font-family: var(--serif);
-    font-style: italic;
-    font-size: clamp(19px, 3vw, 26px);
-    line-height: 1.45;
-    color: #ffffff;
-    margin: 0 0 10px;
-  }
-  cite {
-    font-style: normal;
-    font-size: 13.5px;
-    letter-spacing: 0.04em;
-    color: var(--hero-gold);
-  }
   .card-body {
     font-size: 16.5px;
     line-height: 1.6;
@@ -631,8 +689,9 @@
     font-size: 12px;
     text-transform: uppercase;
     letter-spacing: 0.3em;
-    color: rgba(255, 255, 255, 0.75);
+    color: rgba(255, 255, 255, 0.8);
     margin: 26px 0 0;
+    text-shadow: 0 1px 10px rgba(12, 22, 38, 0.5);
   }
   .scroll-tick {
     display: block;
