@@ -61,14 +61,36 @@
   onMount(() => {
     const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
+    // --- Budget first. Everything below scales off this tier, because a
+    // pretty scene that flattens a phone battery is a broken scene. Cheap
+    // tricks (gradients, fog, one extra instanced draw) buy nearly all of
+    // the beauty; per-pixel cost is what actually drains power, so the two
+    // dials that matter are resolution and frame rate. ---
+    const cores = navigator.hardwareConcurrency || 4;
+    const mem = navigator.deviceMemory || 4;
+    const small = window.innerWidth < 760;
+    const lowTier = small || cores <= 4 || mem <= 4;
+    const q = lowTier
+      ? { blades: 1100, rain: 900, motes: 90, embers: 90, dpr: 1.25, aa: false, fps: 30 }
+      : { blades: 2600, rain: 1700, motes: 220, embers: 170, dpr: 1.6, aa: true, fps: 48 };
+    // Capping frame rate is the single biggest battery win available here:
+    // half the frames is roughly half the GPU work, and at these speeds the
+    // motion still reads as smooth.
+    const frameInterval = 1 / (reduceMotion ? 20 : q.fps);
+
     let renderer;
     try {
-      renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+      renderer = new THREE.WebGLRenderer({
+        canvas,
+        antialias: q.aa,
+        powerPreference: "low-power",
+        stencil: false,
+      });
     } catch {
       webglFailed = true;
       return;
     }
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.75));
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, q.dpr));
 
     const scene = new THREE.Scene();
     const camera = new THREE.PerspectiveCamera(50, 1, 0.1, 90);
@@ -84,8 +106,8 @@
     const stormGround = new THREE.Color("#1e2a1c");
     const dayBase = new THREE.Color("#40803a");
     const dayTip = new THREE.Color("#a8d468");
-    const stormBase = new THREE.Color("#1a2a14");
-    const stormTip = new THREE.Color("#4a5c35");
+    const stormBase = new THREE.Color("#22331b");
+    const stormTip = new THREE.Color("#586b40");
     // The drought and fire phases: meadow cured to straw, smoky haze.
     const dryBase = new THREE.Color("#6e5a26");
     const dryTip = new THREE.Color("#cfae52");
@@ -93,6 +115,13 @@
     const fireGround = new THREE.Color("#5c4426");
     const dryHaze = new THREE.Color("#ede6d0");
     const fireHaze = new THREE.Color("#8a6a48");
+    // Sunlight tint on the grass, and the treeline through each phase.
+    const warmLight = new THREE.Color("#ffe6ad");
+    const emberLight = new THREE.Color("#ff9d4a");
+    const treeDay = new THREE.Color("#3f5a44");
+    const treeStorm = new THREE.Color("#1c2630");
+    const treeDry = new THREE.Color("#6b6b43");
+    const treeFire = new THREE.Color("#241a14");
 
     // --- Sky: a gradient dome, not a flat color — the horizon stays lighter
     // than the zenith in both weathers, which is most of what makes a sky
@@ -155,16 +184,125 @@
     );
     scene.add(sky);
 
-    // --- Ground ---
+    // --- Ground: fogged into the horizon haze instead of ending at a hard
+    // line, with faint large-scale mottling so it doesn't read as a flat
+    // disc. Two extra instructions per pixel; the depth it buys is what
+    // makes the meadow look like a landscape rather than a backdrop. ---
+    const groundUniforms = {
+      uColor: { value: dayGround.clone() },
+      uFog: { value: dayHorizon.clone() },
+    };
     const ground = new THREE.Mesh(
-      new THREE.CircleGeometry(50, 40),
-      new THREE.MeshBasicMaterial({ color: dayGround.clone() })
+      new THREE.CircleGeometry(60, 48),
+      new THREE.ShaderMaterial({
+        uniforms: groundUniforms,
+        vertexShader: `
+          varying float vDepth;
+          varying vec2 vWorld;
+          void main() {
+            vec4 world = modelMatrix * vec4(position, 1.0);
+            vWorld = world.xz;
+            vec4 view = viewMatrix * world;
+            vDepth = -view.z;
+            gl_Position = projectionMatrix * view;
+          }
+        `,
+        fragmentShader: `
+          uniform vec3 uColor;
+          uniform vec3 uFog;
+          varying float vDepth;
+          varying vec2 vWorld;
+          void main() {
+            // Gentle patchiness — richer and drier ground in slow drifts.
+            float n = sin(vWorld.x * 0.13) * sin(vWorld.y * 0.11 + 1.7);
+            vec3 c = uColor * (1.0 + n * 0.06);
+            float f = smoothstep(6.0, 40.0, vDepth);
+            gl_FragColor = vec4(mix(c, uFog, f), 1.0);
+          }
+        `,
+      })
     );
     ground.rotation.x = -Math.PI / 2;
     scene.add(ground);
 
+    // --- Distant treeline: one alpha-mapped cylinder, one draw call. A
+    // silhouette on the horizon does more for depth than any amount of
+    // extra geometry up close — and in the fire phase it's the thing that
+    // burns, with the glow rising behind it. ---
+    const treeTex = (() => {
+      const c = document.createElement("canvas");
+      c.width = 2048;
+      c.height = 128;
+      const g = c.getContext("2d");
+      g.clearRect(0, 0, 2048, 128);
+      g.fillStyle = "#ffffff";
+      let x = 0;
+      while (x < 2048) {
+        const w = 10 + Math.random() * 26;
+        const h = 34 + Math.random() * 54;
+        const conifer = Math.random() < 0.55;
+        g.beginPath();
+        if (conifer) {
+          g.moveTo(x - w * 0.1, 128);
+          g.lineTo(x + w / 2, 128 - h);
+          g.lineTo(x + w * 1.1, 128);
+        } else {
+          g.moveTo(x, 128);
+          g.quadraticCurveTo(x - w * 0.15, 128 - h * 0.8, x + w / 2, 128 - h);
+          g.quadraticCurveTo(x + w * 1.15, 128 - h * 0.8, x + w, 128);
+        }
+        g.closePath();
+        g.fill();
+        x += w * (0.45 + Math.random() * 0.4);
+      }
+      const t = new THREE.CanvasTexture(c);
+      t.colorSpace = THREE.SRGBColorSpace;
+      // The shader tiles this strip around the ring; without repeat wrapping
+      // every uv past 1 clamps to the last column and the treeline renders
+      // as one solid band.
+      t.wrapS = THREE.RepeatWrapping;
+      return t;
+    })();
+    const treeUniforms = {
+      uMap: { value: treeTex },
+      uColor: { value: new THREE.Color("#3f5a44") },
+      uFog: { value: dayHorizon.clone() },
+      uHaze: { value: 0.55 },
+    };
+    const treeline = new THREE.Mesh(
+      new THREE.CylinderGeometry(42, 42, 5.2, 48, 1, true),
+      new THREE.ShaderMaterial({
+        uniforms: treeUniforms,
+        side: THREE.BackSide,
+        transparent: true,
+        depthWrite: false,
+        vertexShader: `
+          varying vec2 vUv;
+          void main() {
+            vUv = uv;
+            gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+          }
+        `,
+        fragmentShader: `
+          uniform sampler2D uMap;
+          uniform vec3 uColor;
+          uniform vec3 uFog;
+          uniform float uHaze;
+          varying vec2 vUv;
+          void main() {
+            float a = texture2D(uMap, vec2(vUv.x * 6.0, vUv.y)).r;
+            if (a < 0.5) discard;
+            // Aerial perspective: distant trees wash toward the haze.
+            gl_FragColor = vec4(mix(uColor, uFog, uHaze), 1.0);
+          }
+        `,
+      })
+    );
+    treeline.position.y = 2.55;
+    scene.add(treeline);
+
     // --- Grass: one instanced draw call, wind in the vertex shader. ---
-    const BLADES = window.innerWidth < 700 ? 1200 : 2400;
+    const BLADES = q.blades;
     const blade = new THREE.PlaneGeometry(0.055, 1, 1, 4);
     blade.translate(0, 0.5, 0);
     {
@@ -181,6 +319,9 @@
       uBase: { value: dayBase.clone() },
       uTip: { value: dayTip.clone() },
       uFog: { value: dayHorizon.clone() },
+      uSunDir: { value: new THREE.Vector3(-0.45, 0.55, -0.7).normalize() },
+      uSun: { value: 1 }, // how directional the light is — killed by cloud
+      uWarm: { value: new THREE.Color("#ffe6ad") },
     };
     const grassMat = new THREE.ShaderMaterial({
       uniforms: grassUniforms,
@@ -188,13 +329,20 @@
       vertexShader: `
         uniform float uTime;
         uniform float uWind;
+        uniform vec3 uSunDir;
         attribute float aPhase;
         varying float vH;
         varying float vDepth;
         varying float vShade;
+        varying float vLight;
         void main() {
           vH = uv.y;
           vShade = 0.88 + 0.24 * fract(aPhase * 7.13);
+          // Each blade faces a different way, so each catches the sun
+          // differently — the cheapest realism in the whole scene. The
+          // blade's normal is its instance rotation applied to +z.
+          vec3 n = normalize(mat3(instanceMatrix) * vec3(0.0, 0.0, 1.0));
+          vLight = abs(dot(n, uSunDir));
           vec4 world = instanceMatrix * vec4(position, 1.0);
           float bend = vH * vH;
           // Gusty wind: a base sway plus a slower traveling gust front, both
@@ -212,11 +360,19 @@
         uniform vec3 uBase;
         uniform vec3 uTip;
         uniform vec3 uFog;
+        uniform vec3 uWarm;
+        uniform float uSun;
         varying float vH;
         varying float vDepth;
         varying float vShade;
+        varying float vLight;
         void main() {
           vec3 c = mix(uBase, uTip, vH) * vShade;
+          // Deep in the sward it is darker — light doesn't reach the base.
+          c *= 0.62 + 0.38 * smoothstep(0.0, 0.55, vH);
+          // Directional sun, warm where it lands. Overcast flattens it.
+          c *= 1.0 - uSun * 0.35 + uSun * 0.7 * vLight;
+          c += uWarm * uSun * pow(vLight, 3.0) * vH * 0.22;
           float f = smoothstep(9.0, 34.0, vDepth);
           gl_FragColor = vec4(mix(c, uFog, f), 1.0);
         }
@@ -291,6 +447,45 @@
     sun.scale.setScalar(9);
     scene.add(sun);
 
+    // A wide, very faint second glow — the bloom you get looking toward the
+    // sun through summer air. One additive sprite, no post-processing.
+    const sunBloom = new THREE.Sprite(
+      new THREE.SpriteMaterial({
+        map: glowTexture("rgba(255,236,190,0.5)", "rgba(255,236,190,0)"),
+        transparent: true,
+        depthWrite: false,
+        blending: THREE.AdditiveBlending,
+      })
+    );
+    sunBloom.position.copy(sun.position);
+    sunBloom.scale.setScalar(30);
+    scene.add(sunBloom);
+
+    // --- Pollen: motes drifting through the sunlight. Almost free (one
+    // points draw), and the thing that makes the meadow feel warm and alive
+    // rather than empty. They vanish the moment the storm arrives. ---
+    const MOTES = q.motes;
+    const moteGeom = new THREE.BufferGeometry();
+    const motePos = new Float32Array(MOTES * 3);
+    const moteSeed = new Float32Array(MOTES);
+    for (let i = 0; i < MOTES; i++) {
+      motePos[i * 3] = -7 + Math.random() * 14;
+      motePos[i * 3 + 1] = 0.3 + Math.random() * 2.6;
+      motePos[i * 3 + 2] = -6 + Math.random() * 10;
+      moteSeed[i] = Math.random() * Math.PI * 2;
+    }
+    moteGeom.setAttribute("position", new THREE.BufferAttribute(motePos, 3));
+    const moteMat = new THREE.PointsMaterial({
+      color: "#fff3cd",
+      size: 0.045,
+      transparent: true,
+      opacity: 0,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending,
+    });
+    const motes = new THREE.Points(moteGeom, moteMat);
+    scene.add(motes);
+
     // --- Clouds: clusters of soft puffs. A few live in the day sky from the
     // start (an empty blue sky reads fake); the storm adds more, drops them
     // lower, and darkens their bases into a deck. ---
@@ -333,9 +528,54 @@
 
     // --- Flood water: a dark sheet that rises over the grass during the
     // downpour, then drains away as the drought phase takes over. ---
+    const waterUniforms = {
+      uTime: { value: 0 },
+      uColor: { value: new THREE.Color("#2e3c46") },
+      uSky: { value: new THREE.Color("#5a6a78") },
+      uFog: { value: stormHorizon.clone() },
+      uOpacity: { value: 0 },
+    };
     const water = new THREE.Mesh(
-      new THREE.CircleGeometry(50, 40),
-      new THREE.MeshBasicMaterial({ color: "#2e3c46", transparent: true, opacity: 0, depthWrite: false })
+      new THREE.CircleGeometry(60, 48),
+      new THREE.ShaderMaterial({
+        uniforms: waterUniforms,
+        transparent: true,
+        depthWrite: false,
+        vertexShader: `
+          varying float vDepth;
+          varying vec2 vWorld;
+          void main() {
+            vec4 world = modelMatrix * vec4(position, 1.0);
+            vWorld = world.xz;
+            vec4 view = viewMatrix * world;
+            vDepth = -view.z;
+            gl_Position = projectionMatrix * view;
+          }
+        `,
+        fragmentShader: `
+          uniform float uTime;
+          uniform vec3 uColor;
+          uniform vec3 uSky;
+          uniform vec3 uFog;
+          uniform float uOpacity;
+          varying float vDepth;
+          varying vec2 vWorld;
+          void main() {
+            // Crossed wave trains: enough to read as a disturbed surface
+            // catching the light, at three sine calls a pixel.
+            float w = sin(vWorld.x * 2.7 + uTime * 1.7)
+                    + sin(vWorld.y * 3.3 - uTime * 2.1)
+                    + sin((vWorld.x + vWorld.y) * 1.6 + uTime * 1.1);
+            float glint = smoothstep(0.8, 2.4, w);
+            vec3 c = mix(uColor, uSky, 0.45 + glint * 0.55);
+            c += vec3(0.10, 0.13, 0.16) * glint;
+            // Flatter and hazier toward the horizon, like real standing water.
+            float f = smoothstep(4.0, 26.0, vDepth);
+            c = mix(c, uFog, f * 0.85);
+            gl_FragColor = vec4(c, uOpacity);
+          }
+        `,
+      })
     );
     water.rotation.x = -Math.PI / 2;
     water.position.y = -0.06;
@@ -359,7 +599,7 @@
       return t;
     })();
     const fireGlow = new THREE.Mesh(
-      new THREE.PlaneGeometry(70, 7),
+      new THREE.PlaneGeometry(120, 10),
       new THREE.MeshBasicMaterial({
         map: fireGlowTex,
         transparent: true,
@@ -368,20 +608,21 @@
         blending: THREE.AdditiveBlending,
       })
     );
-    fireGlow.position.set(0, 2.6, -26);
+    // Beyond the treeline, so the trees stand as silhouettes against it.
+    fireGlow.position.set(0, 3.2, -46);
     scene.add(fireGlow);
     const smokes = [];
     for (let i = 0; i < 5; i++) {
       const s = new THREE.Sprite(
         new THREE.SpriteMaterial({ map: puffTex, transparent: true, opacity: 0, depthWrite: false, color: "#4a423a" })
       );
-      s.position.set(-20 + i * 10 + Math.random() * 4, 5 + Math.random() * 3, -24);
-      s.scale.set(7 + Math.random() * 4, 5 + Math.random() * 2, 1);
-      s.userData.rise = 0.15 + Math.random() * 0.2;
+      s.position.set(-34 + i * 17 + Math.random() * 6, 6 + Math.random() * 4, -44);
+      s.scale.set(16 + Math.random() * 9, 11 + Math.random() * 5, 1);
+      s.userData.rise = 0.25 + Math.random() * 0.3;
       scene.add(s);
       smokes.push(s);
     }
-    const EMBERS = 160;
+    const EMBERS = q.embers;
     const emberGeom = new THREE.BufferGeometry();
     const emberPos = new Float32Array(EMBERS * 3);
     for (let i = 0; i < EMBERS; i++) {
@@ -404,7 +645,7 @@
     // --- Rain: streaks whose slant equals the drops' actual velocity
     // ratio (drift ÷ fall), so what you see matches how they move. Heavy
     // rain falls fast — near-vertical, with only a slight wind lean. ---
-    const RAIN = 1700;
+    const RAIN = q.rain;
     const STREAK = 0.34;
     const rainGeom = new THREE.BufferGeometry();
     const rainPos = new Float32Array(RAIN * 6);
@@ -639,7 +880,7 @@
     io.observe(wrap);
 
     const sunFireCol = new THREE.Color("#ff8a40");
-    const waterCol = new THREE.Color("#2e3c46");
+    const waterCol = new THREE.Color("#41535f");
     const clock = new THREE.Clock();
     let elapsed = 0;
     let flashT = -1; // time within the current flash envelope; -1 = idle
@@ -651,10 +892,19 @@
     const tmpColor = new THREE.Color();
     const tmpColor2 = new THREE.Color();
 
+    let acc = 0;
     function frame() {
       raf = requestAnimationFrame(frame);
-      const dt = Math.min(clock.getDelta(), 0.05);
+      const raw = clock.getDelta();
+      // Off-screen or backgrounded: burn nothing at all.
       if (!visible || document.hidden) return;
+      // Frame-rate cap: accumulate real time and only render once a full
+      // interval has passed, so the scene costs the same on a 120 Hz phone
+      // as on a 60 Hz laptop.
+      acc += raw;
+      if (acc < frameInterval) return;
+      const dt = Math.min(acc, 0.05);
+      acc = 0;
       elapsed += dt * (reduceMotion ? 0.15 : 1);
       storm += (targetStorm - storm) * Math.min(1, dt * 5);
       const t = elapsed;
@@ -663,10 +913,12 @@
       // rises and (where the phase passes) falls again, so the meadow moves
       // through storm → flood → drought → fire as one continuous day.
       const P = storm;
-      const stormF = Math.max(0, Math.min(1, smooth(0.18, 0.42, P) - smooth(0.62, 0.78, P)));
-      const rainF = Math.max(0, Math.min(1, smooth(0.4, 0.5, P) - smooth(0.6, 0.7, P)));
-      const floodF = Math.max(0, Math.min(1, smooth(0.45, 0.62, P) - smooth(0.68, 0.82, P)));
-      const dryF = smooth(0.64, 0.8, P);
+      const stormF = Math.max(0, Math.min(1, smooth(0.18, 0.42, P) - smooth(0.6, 0.74, P)));
+      const rainF = Math.max(0, Math.min(1, smooth(0.4, 0.5, P) - smooth(0.58, 0.68, P)));
+      // The water must be fully drained before the drought palette takes
+      // over, or its glints read as pale discs lying on dry ground.
+      const floodF = Math.max(0, Math.min(1, smooth(0.46, 0.6, P) - smooth(0.62, 0.71, P)));
+      const dryF = smooth(0.66, 0.82, P);
       const fireF = smooth(0.84, 0.95, P);
 
       // Lightning: a two-pulse flicker, the way real strikes re-strike.
@@ -701,17 +953,48 @@
       grassUniforms.uWind.value = (reduceMotion ? 0.25 : 1) * (stormF * 0.9 + fireF * 0.25);
       grassUniforms.uBase.value.copy(dayBase).lerp(stormBase, stormF).lerp(dryBase, dryF);
       grassUniforms.uTip.value.copy(dayTip).lerp(stormTip, stormF).lerp(dryTip, dryF);
-      ground.material.color
+      // Cloud kills the directional light; the drought brings it back hard,
+      // and the fire turns it low and orange.
+      grassUniforms.uSun.value = Math.max(0, 1 - stormF * 1.4) * (1 - fireF * 0.4) + dryF * 0.35;
+      grassUniforms.uWarm.value.copy(warmLight).lerp(emberLight, fireF);
+      groundUniforms.uColor.value
         .copy(dayGround)
         .lerp(stormGround, stormF)
         .lerp(dryGround, dryF)
         .lerp(fireGround, fireF * 0.7);
-      if (flash > 0) ground.material.color.lerp(flashColor, flash * 0.12);
+      if (flash > 0) groundUniforms.uColor.value.lerp(flashColor, flash * 0.12);
+      groundUniforms.uFog.value.copy(grassUniforms.uFog.value);
+
+      // Treeline: same aerial-perspective wash as the rest of the distance,
+      // scorched and back-lit once the fire takes the horizon.
+      treeUniforms.uFog.value.copy(grassUniforms.uFog.value);
+      treeUniforms.uColor.value
+        .copy(treeDay)
+        .lerp(treeStorm, stormF)
+        .lerp(treeDry, dryF)
+        .lerp(treeFire, fireF);
+      treeUniforms.uHaze.value = 0.5 + dryF * 0.2 - fireF * 0.35;
       // The sun: out in the morning, swallowed by the storm, back harsh and
       // white for the drought, then dimmed orange behind the smoke.
       sun.material.opacity = Math.max(0, 1 - stormF * 2.2) * (1 - fireF * 0.55);
       sun.material.color.setRGB(1, 1 - dryF * 0.04, 1 - dryF * 0.15).lerp(sunFireCol, fireF);
       sun.scale.setScalar(9 + dryF * 2.5);
+      sunBloom.material.opacity = sun.material.opacity * 0.5;
+      sunBloom.material.color.copy(sun.material.color);
+
+      // Pollen: only in the sunlight, gone once the sky closes over.
+      const moteF = Math.max(0, 1 - smooth(0.1, 0.34, P)) * (reduceMotion ? 0.4 : 1);
+      moteMat.opacity = moteF * 0.75;
+      if (moteF > 0.01) {
+        const mp = moteGeom.attributes.position.array;
+        for (let i = 0; i < MOTES; i++) {
+          const s = moteSeed[i];
+          mp[i * 3] += Math.sin(t * 0.6 + s) * dt * 0.12;
+          mp[i * 3 + 1] += (Math.sin(t * 0.9 + s * 1.7) * 0.5 + 0.18) * dt * 0.2;
+          if (mp[i * 3 + 1] > 3.2) mp[i * 3 + 1] = 0.25;
+        }
+        moteGeom.attributes.position.needsUpdate = true;
+      }
       flowers.children.forEach((f, i) => {
         f.rotation.z = Math.sin(t * 1.3 + i) * (0.05 + stormF * 0.35);
       });
@@ -719,9 +1002,16 @@
       // Flood water
       water.visible = floodF > 0.01;
       water.position.y = -0.06 + floodF * 0.55;
-      water.material.opacity = 0.85 * Math.min(1, floodF * 2);
-      water.material.color.copy(waterCol);
-      if (flash > 0) water.material.color.lerp(flashColor, flash * 0.25);
+      waterUniforms.uTime.value = t;
+      waterUniforms.uOpacity.value = 0.88 * Math.min(1, floodF * 2);
+      waterUniforms.uColor.value.copy(waterCol);
+      // The surface mirrors whatever the sky is doing, lightning included.
+      waterUniforms.uSky.value.copy(grassUniforms.uFog.value);
+      waterUniforms.uFog.value.copy(grassUniforms.uFog.value);
+      if (flash > 0) {
+        waterUniforms.uColor.value.lerp(flashColor, flash * 0.3);
+        waterUniforms.uSky.value.lerp(flashColor, flash * 0.6);
+      }
 
       // Fire
       fireGlow.material.opacity = fireF * (0.75 + 0.25 * Math.sin(t * 7.3));
@@ -729,7 +1019,7 @@
         s.material.opacity = fireF * 0.55;
         if (fireF > 0.01) {
           s.position.y += s.userData.rise * dt;
-          if (s.position.y > 11) s.position.y = 4.5;
+          if (s.position.y > 20) s.position.y = 5.5;
         }
       }
       emberMat.opacity = fireF * 0.85;
@@ -871,6 +1161,15 @@
       puffTex.dispose();
       water.geometry.dispose();
       water.material.dispose();
+      ground.geometry.dispose();
+      ground.material.dispose();
+      treeTex.dispose();
+      treeline.geometry.dispose();
+      treeline.material.dispose();
+      moteGeom.dispose();
+      moteMat.dispose();
+      sunBloom.material.map.dispose();
+      sunBloom.material.dispose();
       fireGlowTex.dispose();
       fireGlow.geometry.dispose();
       fireGlow.material.dispose();
