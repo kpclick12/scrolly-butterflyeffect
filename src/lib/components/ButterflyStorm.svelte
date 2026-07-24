@@ -881,6 +881,13 @@
 
     const sunFireCol = new THREE.Color("#ff8a40");
     const waterCol = new THREE.Color("#41535f");
+    const rainCol = new THREE.Color("#aebfcf");
+    // A deliberately slow follower of the fire phase. Because it lags far
+    // behind the scroll easing, the camera keeps creeping toward the fire
+    // for a few seconds after the reader stops — the pull is felt without
+    // any unbounded drift.
+    let fireCreep = 0;
+    let lastFov = 50;
     const clock = new THREE.Clock();
     let elapsed = 0;
     let flashT = -1; // time within the current flash envelope; -1 = idle
@@ -1047,8 +1054,13 @@
         if (c.position.x > 22) c.position.x = -22;
       }
 
-      // Rain
-      rainMat.opacity = rainF * (reduceMotion ? 0.25 : 0.55);
+      // Rain. A strike lights the falling water as well as the sky — the
+      // drops flare white for the instant the bolt is bright, which is the
+      // detail that makes a lightning flash feel like it happened *in* the
+      // scene rather than on top of it.
+      rainMat.color.copy(rainCol);
+      if (flash > 0) rainMat.color.lerp(flashColor, flash * 0.85);
+      rainMat.opacity = Math.min(1, rainF * (reduceMotion ? 0.25 : 0.55) * (1 + flash * 0.7));
       if (rainMat.opacity > 0) {
         const p = rainGeom.attributes.position.array;
         const fallSpeed = 9 + stormF * 6;
@@ -1121,10 +1133,20 @@
 
       // Camera: a slow breath; pulls back slightly as the storm grows, and
       // shudders for an instant on each strike.
+      fireCreep += (fireF - fireCreep) * Math.min(1, dt * 0.22);
       camera.position.x = Math.sin(t * 0.05) * 0.25 + flash * 0.05 * Math.sin(t * 70);
-      camera.position.y = 1.6 + P * 0.25;
-      camera.position.z = 6 + P * 0.8;
-      camera.lookAt(0, 1.35, 0);
+      camera.position.y = 1.6 + P * 0.25 + fireCreep * 0.3;
+      // Dolly toward the burning horizon, and tighten the lens slightly as
+      // it goes — the compression pulls the fire closer than the move alone.
+      camera.position.z = 6 + P * 0.8 - fireCreep * 2.6;
+      const fov = 50 - fireCreep * 5;
+      if (Math.abs(fov - lastFov) > 0.02) {
+        camera.fov = fov;
+        camera.updateProjectionMatrix();
+        lastFov = fov;
+      }
+      // Lift the gaze toward the treeline as the fire takes it.
+      camera.lookAt(0, 1.35 + fireCreep * 0.5, 0);
       if (vignetteEl) vignetteEl.style.opacity = Math.max(stormF * 0.6, fireF * 0.5);
 
       cardEls.forEach((el, i) => {
