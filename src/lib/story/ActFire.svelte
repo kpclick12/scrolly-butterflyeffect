@@ -64,5 +64,28 @@
         </p>
       </div>
     </section>
+
+    <section class="scrolly-step">
+      <p class="kicker">July 2026 · as you read this</p>
+      <h3>The chart above stops where the record does</h3>
+      <p>
+        It covers completed seasons. The current one is still burning.
+        After Europe's hottest June on record left the Mediterranean
+        tinder dry, fires this summer have killed at least 15 people and
+        driven tens of thousands from their homes — 63,000 evacuated in
+        southern France, 10,000 outside Madrid, where a national
+        emergency was declared. Spain's La&nbsp;Mierla fire alone has
+        burnt some 32,000&nbsp;hectares.
+      </p>
+      <div class="callout">
+        <p class="callout-num">254,388 ha</p>
+        <p class="callout-label">
+          burnt in the EU by 23 July 2026, from more than twice the usual
+          number of large fires for the date — the second-largest area
+          burnt <em>by this stage of a season</em> in twenty years
+          (EFFIS; provisional, and the season has months to run)
+        </p>
+      </div>
+    </section>
   </Scrolly>
 </section>

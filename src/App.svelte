@@ -119,6 +119,16 @@
         figure.
       </li>
       <li>
+        <strong>The 2026 season</strong> (Act Five's closing card) is
+        live, provisional reporting, not a completed record: EFFIS/JRC
+        season-to-date totals as of 23 July 2026 (254,388&nbsp;ha; 1,254
+        fires over 30&nbsp;ha against a long-term average of 569 for the
+        date), with an AFP analysis of EFFIS data ranking it second-
+        largest <em>for this point in a season</em> over twenty years —
+        not second-largest overall. Casualty and evacuation figures are
+        as reported in late July 2026 and will change.
+      </li>
+      <li>
         The "7% more moisture per degree" rule of thumb is the
         Clausius–Clapeyron relation, as used across the attribution
         literature.
