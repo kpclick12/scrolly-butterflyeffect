@@ -1,17 +1,12 @@
 {
-  "note": "Decadal mean surface air temperature anomalies relative to the 1850-1900 pre-industrial baseline, in °C. Approximate, rounded values assembled from Copernicus ERA5 / ESOTC and WMO reporting.",
-  "decades": [
-    { "label": "1950s", "europe": 0.1, "world": 0.05 },
-    { "label": "1960s", "europe": 0.1, "world": 0.05 },
-    { "label": "1970s", "europe": 0.15, "world": 0.1 },
-    { "label": "1980s", "europe": 0.5, "world": 0.3 },
-    { "label": "1990s", "europe": 0.8, "world": 0.5 },
-    { "label": "2000s", "europe": 1.2, "world": 0.7 },
-    { "label": "2010s", "europe": 1.7, "world": 1.0 },
-    { "label": "2020s", "europe": 2.4, "world": 1.3 }
+  "note": "Every value here is published by the Copernicus Climate Change Service (C3S) and WMO in the European State of the Climate 2025 report. `ratePerDecade` is the warming trend over the past ~30 years (since the mid-1990s). `abovePreIndustrial` is the latest five-year-average surface air temperature relative to the 1850-1900 pre-industrial baseline. Arctic figures are over land only, from ERA5. Nothing in this file is interpolated or estimated.",
+  "source": "Copernicus Climate Change Service / WMO, European State of the Climate 2025",
+  "regions": [
+    { "id": "arctic", "label": "Arctic", "ratePerDecade": 0.75, "abovePreIndustrial": 3.2 },
+    { "id": "europe", "label": "Europe", "ratePerDecade": 0.56, "abovePreIndustrial": 2.5 },
+    { "id": "world", "label": "World", "ratePerDecade": 0.27, "abovePreIndustrial": 1.4 }
   ],
-  "ratesPerDecade": { "europe": 0.56, "world": 0.27 },
-  "fiveYearMean": { "europe": 2.5, "world": 1.4, "arctic": 3.2 },
+  "warmestYearOnRecord": 2024,
   "seaRecordYearsInARow": 4,
-  "warmestYearOnRecord": 2024
+  "shareOfContinentAboveAverage2025": 95
 }

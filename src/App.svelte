@@ -71,11 +71,14 @@
       <li>
         <strong>Warming rates and anomalies</strong> — Copernicus Climate
         Change Service (C3S) / WMO, <em>European State of the Climate</em>
-        reports (2024, 2025): Europe ≈0.56&nbsp;°C per decade vs
-        ≈0.27&nbsp;°C globally over the past 30 years; latest five-year
-        means ≈2.5&nbsp;°C (Europe), ≈1.4&nbsp;°C (world), ≈3.2&nbsp;°C
-        (Arctic) above 1850–1900. The decadal chart interpolates
-        approximate decade means consistent with those published rates.
+        reports (2024, 2025). Act Two's chart plots only published values:
+        warming over the past ~30 years of 0.75&nbsp;°C per decade
+        (Arctic), 0.56&nbsp;°C (Europe) and 0.27&nbsp;°C (world); and
+        latest five-year-average temperatures of +3.2&nbsp;°C, +2.5&nbsp;°C
+        and +1.4&nbsp;°C against the 1850–1900 baseline. Arctic values are
+        over land only (ERA5). No intermediate points are interpolated —
+        it is drawn as bars rather than a time series because the sourced
+        record is these figures, not an annual series we hold.
       </li>
       <li>
         <strong>Heat mortality</strong> — 2022–2024: Ballester et al. and
