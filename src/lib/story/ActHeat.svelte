@@ -80,9 +80,9 @@
       <div class="callout">
         <p class="callout-num">+80%</p>
         <p class="callout-label">
-          how much higher the recent toll would be <em>without</em> this
-          century's adaptation — proof that protection works, and that the
-          heat is outrunning it
+          how much higher 2023's toll would have been <em>without</em>
+          this century's adaptation (and +101% among those aged 80+) —
+          proof that protection works, and that the heat is outrunning it
         </p>
       </div>
     </section>

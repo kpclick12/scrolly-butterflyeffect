@@ -40,8 +40,8 @@
       <h3>The exceptional becomes regular</h3>
       <p>
         2022's drought-driven season burnt over 800,000 hectares. In 2023,
-        a single fire near Evros in Greece consumed about
-        <strong>96,000 hectares</strong> — the largest single wildfire ever
+        a single fire near Evros in Greece consumed more than
+        <strong>93,000 hectares</strong> — the largest single wildfire ever
         recorded in the EU.
       </p>
     </section>
