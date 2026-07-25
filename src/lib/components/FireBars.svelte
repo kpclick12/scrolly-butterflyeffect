@@ -58,8 +58,10 @@
     </text>
   </svg>
   <p class="legend">
-    Approximate EFFIS-mapped burnt area, rounded. Records begin in 2006;
-    2025's ≈1.08 million ha is the highest ever mapped.
+    EFFIS-mapped burnt area, as first reported for each season (EFFIS
+    reprocesses its archive, so figures shift slightly between reports).
+    Records begin in 2006; 2025's 1,079,538 ha is the highest ever mapped,
+    ahead of 2017's 988,524 ha.
   </p>
 </figure>
 

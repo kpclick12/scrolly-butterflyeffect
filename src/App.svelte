@@ -108,10 +108,15 @@
         network above high-flood threshold, ≥€18&nbsp;bn damage).
       </li>
       <li>
-        <strong>Wildfires</strong> — EFFIS / JRC annual mapping, EU-27,
-        approximate and rounded per year; 2025: 1,079,538&nbsp;ha from
-        7,783 fires, the record since mapping began in 2006; the 2023
-        Evros fire ≈96,000&nbsp;ha, the largest single fire in EU records.
+        <strong>Wildfires</strong> — EFFIS / JRC annual mapping, EU-27.
+        2025: 1,079,538&nbsp;ha from 7,783 fires, the record since mapping
+        began in 2006, ahead of 2017's 988,524&nbsp;ha; the 2023 Evros
+        fire burnt more than 93,000&nbsp;ha, the largest single wildfire
+        in EU records. EFFIS reprocesses its archive, so a season's figure
+        can move by up to ~10% between annual reports — the chart uses the
+        values as first reported. The 2019 bar is an estimate: it is the
+        one year in the series we could not tie to a located primary
+        figure.
       </li>
       <li>
         The "7% more moisture per degree" rule of thumb is the

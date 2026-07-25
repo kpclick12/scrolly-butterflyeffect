@@ -1,14 +1,14 @@
 {
-  "note": "Burnt area per year in the EU-27, in thousands of hectares, as mapped by EFFIS (European Forest Fire Information System). Approximate, rounded figures; EFFIS records begin in 2006.",
+  "note": "Burnt area per year in the EU-27, in thousands of hectares, as mapped by EFFIS (European Forest Fire Information System). Approximate, rounded figures; EFFIS records begin in 2006. EFFIS reprocesses its archive, so a given year's figure can shift by up to ~10% between annual reports (2021, for instance, is 500,566 ha in the 2021 report and 449,342 ha in the 2022 one); these are the values as first reported for each season. 2019 is the one year here not tied to a located primary figure and is the roughest estimate in the series.",
   "years": [
-    { "year": "2017", "kha": 990 },
-    { "year": "2018", "kha": 180 },
+    { "year": "2017", "kha": 989 },
+    { "year": "2018", "kha": 178 },
     { "year": "2019", "kha": 400 },
-    { "year": "2020", "kha": 340 },
-    { "year": "2021", "kha": 500 },
-    { "year": "2022", "kha": 840 },
+    { "year": "2020", "kha": 339 },
+    { "year": "2021", "kha": 501 },
+    { "year": "2022", "kha": 837 },
     { "year": "2023", "kha": 500 },
-    { "year": "2024", "kha": 380 },
+    { "year": "2024", "kha": 419 },
     { "year": "2025", "kha": 1080, "record": true }
   ],
   "record2025": {
@@ -19,7 +19,7 @@
     "augustBurst": "22 very large fires in Portugal and Spain in three weeks burned 460,585 ha"
   },
   "evros2023": {
-    "hectares": 96000,
+    "hectares": 93000,
     "label": "The 2023 Evros fire in Greece — the largest single wildfire ever recorded in the EU"
   }
 }
