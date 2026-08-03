@@ -8,14 +8,6 @@
   import ActFire from "./lib/story/ActFire.svelte";
 </script>
 
-<!-- Published at plainx.dev/posts/the-flap-of-a-wing, which carries no site
-     chrome, so without this the only way back is the browser button. Absolute
-     URL on purpose: a relative "/" would land on the GitHub Pages root when the
-     piece is viewed at its build host. -->
-<a class="home-link" href="https://plainx.dev/">
-  <span aria-hidden="true">←</span> (<i>x</i>)plain
-</a>
-
 <ButterflyStorm />
 
 <main>
@@ -254,41 +246,7 @@
     color: var(--text-primary);
   }
 
-  /* Persistent way back to the site. Carries its own dark plate so it stays
-     legible over the bright meadow, the storm, and the light page below —
-     without needing to know which is behind it. */
-  .home-link {
-    position: fixed;
-    top: 14px;
-    left: 14px;
-    z-index: 50;
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    padding: 6px 11px;
-    border-radius: 999px;
-    font-family: var(--sans);
-    font-size: 12px;
-    line-height: 1;
-    color: rgba(255, 255, 255, 0.82);
-    background: rgba(12, 26, 46, 0.5);
-    backdrop-filter: blur(6px);
-    -webkit-backdrop-filter: blur(6px);
-    text-decoration: none;
-    transition: color 160ms ease, background 160ms ease;
-  }
-  .home-link i {
-    font-style: italic;
-  }
-  .home-link:hover,
-  .home-link:focus-visible {
-    color: #ffffff;
-    background: rgba(12, 26, 46, 0.72);
-  }
-
-  @media print {
-    .home-link {
-      display: none;
-    }
-  }
+  /* No fixed back-link on purpose: a pinned chip overlapped chart titles on
+     narrow screens, and covering content is worse than the browser back button.
+     The footer link above is the way back. */
 </style>
